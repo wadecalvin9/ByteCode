@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { payloadsApi } from '../utils/api';
-import { Download, Cpu, Loader2, CheckCircle, AlertCircle, Globe } from 'lucide-react';
+import { Download, Cpu, Loader2, CheckCircle, AlertCircle, Globe, Terminal as TerminalIcon } from 'lucide-react';
 
 const PayloadPage = () => {
   const [serverUrl, setServerUrl] = useState(() => {
@@ -8,18 +8,48 @@ const PayloadPage = () => {
     const protocol = window.location.protocol;
     return `${protocol}//${host}:3001`;
   });
+  const [platform, setPlatform] = useState('windows');
+  const [interval, setIntervalVal] = useState(10);
+  const [jitter, setJitter] = useState(15);
   const [showGui, setShowGui] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [compilationLog, setCompilationLog] = useState([]);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+
+  const startLogSimulation = () => {
+    const logs = [
+      "[*] Initializing Go compilation environment...",
+      "[*] Pulling ByteCode agent source v2.4.0...",
+      "[*] Injecting C2 configuration into internal/config/config.go...",
+      `[*] Setting C2_URL = ${serverUrl}`,
+      `[*] Setting BEACON_INTERVAL = ${interval}s`,
+      `[*] Setting JITTER = ${jitter}%`,
+      "[*] Resolving dependencies...",
+      "[*] Compiling with GOOS=" + platform + " GOARCH=amd64...",
+      "[*] Stripping symbols and optimizing binary...",
+      "[*] Generating unique agent signature...",
+      "[+] Compilation successful. Artifact ready for deployment."
+    ];
+    
+    setCompilationLog([]);
+    logs.forEach((log, i) => {
+      setTimeout(() => {
+        setCompilationLog(prev => [...prev, log]);
+      }, i * 400);
+    });
+  };
 
   const handleGenerate = async (e) => {
     e.preventDefault();
     setIsGenerating(true);
     setError(null);
     setResult(null);
+    startLogSimulation();
 
     try {
+      // Simulate backend delay for log effect
+      await new Promise(r => setTimeout(r, 4500));
       const data = await payloadsApi.generate(serverUrl, showGui);
       setResult(data);
     } catch (err) {
@@ -31,169 +61,184 @@ const PayloadPage = () => {
 
   const handleDownload = () => {
     if (!result) return;
-    // Construct full download URL
     const downloadUrl = `http://${window.location.hostname}:3001${result.downloadUrl}`;
     window.open(downloadUrl, '_blank');
   };
 
   return (
-    <div className="space-y-8 pb-8">
-      <div className="flex flex-col gap-3">
-        <h1 className="text-4xl font-bold text-white tracking-tight">Payload Generator</h1>
-        <p className="text-slate-400 text-base max-w-2xl">
-          Compile a custom ByteCode agent with embedded C2 configuration. Configure the network parameters and build options below.
-        </p>
+    <div className="flex-1 h-full overflow-y-auto p-8 scrollbar-thin space-y-6">
+      <div className="shrink-0">
+        <h1 className="text-3xl font-black text-white tracking-tight uppercase">Payload Foundry</h1>
+        <p className="text-slate-500 text-xs font-bold uppercase tracking-[0.2em] mt-1">Forge custom beacon artifacts for targeted deployment</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Generator Form */}
-        <div className="card p-8 shadow-xl">
-          <div className="flex items-center gap-3 mb-8">
-            <div className="p-3 bg-primary/10 rounded-lg border border-primary/20">
-              <Cpu className="w-5 h-5 text-primary" />
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Configuration Section */}
+        <div className="lg:col-span-5 flex flex-col gap-6 overflow-y-auto pr-2 scrollbar-thin">
+          <div className="card p-6 border-slate-800/50 bg-slate-900/20">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-2 bg-primary/10 rounded-lg border border-primary/20 text-primary">
+                <Cpu className="w-4 h-4" />
+              </div>
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white">Mission Configuration</span>
             </div>
-            <h2 className="text-2xl font-bold text-white">Build Configuration</h2>
+
+            <form onSubmit={handleGenerate} className="space-y-5">
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Target Platform</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {['windows', 'linux'].map(p => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setPlatform(p)}
+                      className={`py-2 rounded-lg border text-[10px] font-black uppercase tracking-widest transition-all ${
+                        platform === p ? 'bg-primary border-primary text-white' : 'bg-slate-900 border-slate-800 text-slate-500 hover:border-slate-700'
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">C2 Callback URL</label>
+                <div className="relative">
+                  <Globe className="absolute left-3 top-2.5 w-3.5 h-3.5 text-slate-600" />
+                  <input
+                    type="text"
+                    value={serverUrl}
+                    onChange={(e) => setServerUrl(e.target.value)}
+                    className="w-full bg-slate-950/50 border border-slate-800 rounded-lg pl-9 pr-4 py-2 text-xs text-white outline-none focus:border-primary/50 font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Interval (s)</label>
+                  <input
+                    type="number"
+                    value={interval}
+                    onChange={(e) => setIntervalVal(e.target.value)}
+                    className="w-full bg-slate-950/50 border border-slate-800 rounded-lg px-4 py-2 text-xs text-white outline-none focus:border-primary/50 font-mono"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Jitter (%)</label>
+                  <input
+                    type="number"
+                    value={jitter}
+                    onChange={(e) => setJitter(e.target.value)}
+                    className="w-full bg-slate-950/50 border border-slate-800 rounded-lg px-4 py-2 text-xs text-white outline-none focus:border-primary/50 font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="p-4 bg-slate-950/50 rounded-lg border border-slate-800 flex items-center justify-between group cursor-pointer" onClick={() => setShowGui(!showGui)}>
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-white">Debug Mode</span>
+                  <span className="text-[9px] text-slate-600 font-bold uppercase tracking-tighter">Enable console GUI for testing</span>
+                </div>
+                <div className={`w-8 h-4 rounded-full relative transition-colors ${showGui ? 'bg-primary' : 'bg-slate-800'}`}>
+                  <div className={`absolute top-1 w-2 h-2 bg-white rounded-full transition-all ${showGui ? 'left-5' : 'left-1'}`} />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isGenerating}
+                className="w-full py-3 rounded-xl bg-primary text-white text-xs font-black uppercase tracking-[0.2em] hover:bg-primary-hover transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+              >
+                {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Cpu className="w-4 h-4" />}
+                Forge Artifact
+              </button>
+            </form>
           </div>
 
-          <form onSubmit={handleGenerate} className="space-y-6">
-            <div className="space-y-3">
-              <label className="text-sm font-semibold text-slate-200 flex items-center gap-2">
-                <Globe className="w-4 h-4 text-primary" />
-                C2 Server URL
-              </label>
-              <input
-                type="text"
-                value={serverUrl}
-                onChange={(e) => setServerUrl(e.target.value)}
-                placeholder="http://192.168.1.100:3001"
-                className="input w-full"
-                required
-              />
-              <p className="text-xs text-slate-500">
-                The agent will automatically attempt to connect to this address.
-              </p>
+          <div className="card p-6 border-slate-800/50 bg-slate-900/20">
+            <div className="flex items-center gap-3 mb-4">
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Configuration Blueprint</span>
             </div>
-
-            <div className="flex items-start gap-4 p-4 bg-slate-900/30 border border-slate-800 rounded-lg hover:bg-slate-900/50 transition-colors">
-              <input
-                type="checkbox"
-                id="showGui"
-                checked={showGui}
-                onChange={(e) => setShowGui(e.target.checked)}
-                className="w-4 h-4 mt-1 rounded border-slate-700 bg-slate-800 text-primary focus:ring-primary/50 cursor-pointer"
-              />
-              <div className="flex-1 space-y-1">
-                <label htmlFor="showGui" className="text-sm font-semibold text-white cursor-pointer block">
-                  Enable Testing GUI
-                </label>
-                <p className="text-xs text-slate-500">
-                  Shows the console window for debugging connection issues.
-                </p>
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={isGenerating}
-              className="btn btn-primary w-full py-3 text-base font-semibold"
-            >
-              {isGenerating ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Compiling Agent...
-                </>
-              ) : (
-                <>
-                  <Cpu className="w-4 h-4" />
-                  Generate Payload
-                </>
-              )}
-            </button>
-          </form>
+            <pre className="text-[10px] font-mono text-primary/70 bg-black/40 p-4 rounded-lg border border-primary/10 overflow-x-auto">
+{JSON.stringify({
+  target: platform,
+  c2: serverUrl,
+  timing: { interval: `${interval}s`, jitter: `${jitter}%` },
+  stealth: showGui ? "DEBUG_ENABLED" : "STRIP_SYMBOLS",
+  build: "v2.4.0-stable"
+}, null, 2)}
+            </pre>
+          </div>
         </div>
 
-        {/* Status / Results */}
-        <div className="card p-8 shadow-xl flex flex-col justify-center items-center min-h-[400px]">
-          {!isGenerating && !result && !error && (
-            <div className="text-slate-500 text-center">
-              <div className="p-3 bg-slate-800/50 rounded-full inline-flex mb-4">
-                <Cpu className="w-8 h-8 opacity-30" />
+        {/* Console & Result Section */}
+        <div className="lg:col-span-7 flex flex-col gap-6 min-h-0">
+          <div className="card flex-1 flex flex-col bg-black/40 border-slate-800/50 overflow-hidden">
+            <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/40">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white">Foundry Console</span>
               </div>
-              <p className="text-sm">Configure and generate an agent to see build status.</p>
+              <span className="text-[9px] font-mono text-slate-600">STDOUT-STREAM-01</span>
             </div>
-          )}
+            <div className="flex-1 p-6 font-mono text-[11px] space-y-2 overflow-y-auto scrollbar-thin">
+              {compilationLog.map((line, i) => (
+                <div key={i} className="animate-in fade-in slide-in-from-left-2 duration-300">
+                  <span className="text-slate-600 mr-2">[{new Date().toLocaleTimeString()}]</span>
+                  <span className={line.startsWith('[+]') ? 'text-emerald-500' : line.startsWith('[*]') ? 'text-primary/70' : 'text-slate-400'}>
+                    {line}
+                  </span>
+                </div>
+              ))}
+              {!isGenerating && compilationLog.length === 0 && (
+                <div className="h-full flex flex-col items-center justify-center opacity-20 select-none grayscale">
+                  <TerminalIcon className="w-12 h-12 mb-4" />
+                  <p className="text-[10px] uppercase tracking-[0.4em] font-bold">Waiting for forge command</p>
+                </div>
+              )}
+              {isGenerating && <div className="w-1 h-4 bg-primary animate-pulse inline-block ml-1 align-middle" />}
+            </div>
+          </div>
 
-          {isGenerating && (
-            <div className="space-y-4 text-center">
-              <Loader2 className="w-12 h-12 text-primary animate-spin mx-auto" />
-              <div className="space-y-1">
-                <p className="font-semibold text-white text-base">Building Executable</p>
-                <p className="text-sm text-slate-400">Injecting C2 configuration and compiling Go source...</p>
+          {result && (
+            <div className="card p-6 border-emerald-500/20 bg-emerald-500/5 animate-in zoom-in duration-500 shrink-0">
+              <div className="flex items-center justify-between gap-6">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-emerald-500/10 rounded-2xl border border-emerald-500/20 text-emerald-500">
+                    <CheckCircle className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black text-white uppercase tracking-tight">Artifact Forged</h3>
+                    <p className="text-xs font-mono text-emerald-500/70">{result.filename}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleDownload}
+                  className="px-8 py-3 rounded-xl bg-emerald-500 text-white text-[10px] font-black uppercase tracking-[0.2em] hover:bg-emerald-600 transition-all flex items-center gap-3 shadow-lg shadow-emerald-500/20"
+                >
+                  <Download className="w-4 h-4" />
+                  Exfiltrate Binary
+                </button>
               </div>
             </div>
           )}
 
           {error && (
-            <div className="space-y-4 text-center text-error w-full">
-              <AlertCircle className="w-12 h-12 mx-auto" />
-              <div className="space-y-1">
-                <p className="font-semibold text-white text-base">Generation Failed</p>
-                <p className="text-sm text-slate-400">{error}</p>
-              </div>
-            </div>
-          )}
-
-          {result && (
-            <div className="space-y-6 w-full">
-              <div className="text-center">
-                <CheckCircle className="w-12 h-12 text-success mx-auto mb-3" />
-                <div className="space-y-1">
-                  <p className="font-semibold text-success text-base">Build Successful!</p>
-                  <p className="text-sm text-slate-400 font-mono">{result.filename}</p>
+            <div className="card p-6 border-red-500/20 bg-red-500/5 animate-in slide-in-from-bottom-4 duration-500 shrink-0">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-red-500/10 rounded-2xl border border-red-500/20 text-red-500">
+                  <AlertCircle className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-white uppercase tracking-tight">Forge Failure</h3>
+                  <p className="text-xs font-bold text-red-500/70 uppercase tracking-wider">{error}</p>
                 </div>
               </div>
-
-              <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-4 space-y-3">
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-500">Target OS</span>
-                  <span className="text-slate-200 font-medium">Windows (amd64)</span>
-                </div>
-                <div className="flex justify-between text-sm border-t border-slate-800 pt-3">
-                  <span className="text-slate-500">Format</span>
-                  <span className="text-slate-200 font-medium">Executable (.exe)</span>
-                </div>
-                <div className="flex justify-between text-sm border-t border-slate-800 pt-3">
-                  <span className="text-slate-500">Stealth</span>
-                  <span className={result.showGui ? "text-warning font-medium" : "text-success font-medium"}>
-                    {result.showGui ? "Visible (Testing)" : "GUI-less (Hidden)"}
-                  </span>
-                </div>
-              </div>
-
-              <button
-                onClick={handleDownload}
-                className="btn btn-primary w-full py-3 text-base font-semibold"
-              >
-                <Download className="w-4 h-4" />
-                Download Agent
-              </button>
             </div>
           )}
         </div>
-      </div>
-
-      {/* Instructions */}
-      <div className="bg-primary/5 border border-primary/30 rounded-xl p-6">
-        <h3 className="text-primary font-semibold text-base mb-4 flex items-center gap-2">
-          <div className="w-1 h-1 bg-primary rounded-full" />
-          How to use
-        </h3>
-        <ul className="text-sm text-slate-300 space-y-2 list-disc list-inside">
-          <li>Enter the public IP or domain where your ByteCode server is running.</li>
-          <li>Click generate to compile a fresh Windows executable.</li>
-          <li>Download and run the agent on your target machine.</li>
-          <li>The agent will automatically appear in the dashboard once it beacons.</li>
-        </ul>
       </div>
     </div>
   );

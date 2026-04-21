@@ -22,10 +22,12 @@ import {
   ArrowDown,
   MousePointer2,
   Monitor,
-  ShieldCheck
+  ShieldCheck,
+  ShieldAlert,
+  Bomb
 } from 'lucide-react';
 import { agentsApi, tasksApi } from '../utils/api';
-import { format } from 'date-fns';
+import { format, formatDistanceToNow } from 'date-fns';
 
 const AgentDetailPage = () => {
   const { id } = useParams();
@@ -34,28 +36,70 @@ const AgentDetailPage = () => {
   const [loading, setLoading] = useState(true);
   const [command, setCommand] = useState('');
   const [executing, setExecuting] = useState(false);
-  const [activeTab, setActiveTab] = useState('console'); // 'console', 'processes', 'files', 'network'
+  const [activeTab, setActiveTab] = useState('console');
+  const [psSearchQuery, setPsSearchQuery] = useState('');
+  const [netSearchQuery, setNetSearchQuery] = useState('');
+  const [fileSearchQuery, setFileSearchQuery] = useState('');
+  const [commandHistory, setCommandHistory] = useState([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const [toasts, setToasts] = useState([]);
   const [pendingTasks, setPendingTasks] = useState([]);
   const [autoScroll, setAutoScroll] = useState(true);
+  const [lastClearedResultId, setLastClearedResultId] = useState(() => {
+    return localStorage.getItem(`clear_id_${id}`);
+  });
+  const lastResultsLength = useRef(0);
   const resultEndRef = useRef(null);
+
+  const addToast = useCallback((title, type = 'info') => {
+    const id = Date.now();
+    setToasts(prev => [...prev, { id, title, type }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 4000);
+  }, []);
 
   const fetchDetails = useCallback(async () => {
     try {
       const details = await agentsApi.get(id);
       setData(details);
       
-      // Clean up pending tasks that are now in results
-      if (details.results) {
-        setPendingTasks(prev => prev.filter(pt => 
-          !details.results.some(r => Number(r.task_id) === Number(pt.id))
-        ));
-      }
+      // Clean up pending tasks and notify
+      setPendingTasks(prev => {
+        const now = new Date();
+        const results = details.results || [];
+        
+        // 1. Find completed tasks
+        const completed = prev.filter(pt => 
+          results.some(r => String(r.task_id) === String(pt.id))
+        );
+        
+        completed.forEach(task => {
+          const result = results.find(r => String(r.task_id) === String(task.id));
+          addToast(
+            `Task ${task.task_type.replace('_json', '')} ${result.status === 'success' ? 'completed' : 'failed'}`, 
+            result.status === 'success' ? 'success' : 'error'
+          );
+        });
+
+        // 2. Filter out completed and stale tasks
+        return prev.filter(pt => {
+          const isCompleted = results.some(r => String(r.task_id) === String(pt.id));
+          const isStale = (now - new Date(pt.created_at)) > 30000;
+          
+          if (isStale && !isCompleted) {
+            addToast(`Task ${pt.task_type} timed out`, 'error');
+          }
+          
+          return !isCompleted && !isStale;
+        });
+      });
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, addToast]);
 
   useEffect(() => {
     let isMounted = true;
@@ -75,8 +119,6 @@ const AgentDetailPage = () => {
     };
   }, [fetchDetails]);
 
-  const lastResultsLength = useRef(0);
-
   useEffect(() => {
     const newLength = (data?.results?.length || 0) + pendingTasks.length;
     if (newLength > lastResultsLength.current) {
@@ -85,19 +127,25 @@ const AgentDetailPage = () => {
       }
       lastResultsLength.current = newLength;
     }
-  }, [data?.results, pendingTasks, autoScroll, activeTab]);
+  }, [data?.results, pendingTasks.length, autoScroll, activeTab]);
 
   const handleQuickAction = async (type, payload) => {
+    const targetType = type === 'ls' ? 'ls_json' : type;
     try {
-      const result = await tasksApi.create(id, type, payload);
+      const result = await tasksApi.create(id, targetType, payload);
       // Add to pending for immediate feedback
+      const taskObj = result.task || result;
       setPendingTasks(prev => [...prev, {
-        id: result.id,
-        task_type: type,
+        id: taskObj.id,
+        task_type: targetType,
         task_payload: JSON.stringify(payload),
         status: 'pending',
         created_at: new Date().toISOString()
       }]);
+      
+      // Trigger immediate refresh
+      fetchDetails();
+      
       return result;
     } catch (err) {
       alert(err.message);
@@ -115,14 +163,55 @@ const AgentDetailPage = () => {
     }
   };
 
-  const handleRunCommand = async (e) => {
+  const handleCommand = async (e) => {
     e.preventDefault();
     if (!command.trim() || executing) return;
 
     setExecuting(true);
-    await handleQuickAction('execute_command', { command });
-    setCommand('');
-    setExecuting(false);
+    try {
+      const result = await tasksApi.create(id, 'execute_command', { command });
+      
+      // Add to pending for immediate console feedback
+      const taskObj = result.task || result;
+      setPendingTasks(prev => [...prev, {
+        id: taskObj.id,
+        task_type: 'execute_command',
+        task_payload: JSON.stringify({ command }),
+        status: 'pending',
+        created_at: new Date().toISOString()
+      }]);
+
+      setCommandHistory(prev => [command, ...prev].slice(0, 50));
+      setHistoryIndex(-1);
+      setCommand('');
+      addToast(`Command dispatched: ${command.split(' ')[0]}`, 'success');
+      
+      // Immediate refresh
+      fetchDetails();
+    } catch (err) {
+      console.error(err);
+      addToast('Failed to dispatch command', 'error');
+    } finally {
+      setExecuting(false);
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (historyIndex < commandHistory.length - 1) {
+        const nextIndex = historyIndex + 1;
+        setHistoryIndex(nextIndex);
+        setCommand(commandHistory[nextIndex]);
+      }
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (historyIndex > -1) {
+        const nextIndex = historyIndex - 1;
+        setHistoryIndex(nextIndex);
+        setCommand(nextIndex === -1 ? '' : commandHistory[nextIndex]);
+      }
+    }
   };
 
   const renderOutput = (res) => {
@@ -196,200 +285,196 @@ const AgentDetailPage = () => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
+  const joinPath = (base, addition) => {
+    if (!base || base === '.') return addition;
+    const isWindows = base.includes('\\') || (agent.os === 'windows');
+    const separator = isWindows ? '\\' : '/';
+    
+    // Clean up base
+    let cleanBase = base;
+    if (cleanBase.endsWith(separator)) {
+      cleanBase = cleanBase.slice(0, -1);
+    }
+    
+    return `${cleanBase}${separator}${addition}`;
+  };
+
+
   return (
-    <div className="flex flex-col h-full overflow-hidden">
-      {/* Fixed Page Header & Tabs */}
-      <div className="shrink-0 space-y-6 pb-6">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <button 
-              onClick={() => navigate(-1)}
-              className="p-1.5 rounded-lg hover:bg-white/5 text-slate-500 hover:text-white transition-colors"
-            >
-              <ChevronLeft className="w-5 h-5" />
-            </button>
-            <div>
-              <div className="flex items-center gap-3 mb-0.5">
-                <h1 className="text-xl font-bold tracking-tight text-white">{agent.hostname}</h1>
-                <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest ${
-                  agent.connection_status === 'online' ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-slate-800/50 text-slate-500 border border-slate-700'
-                }`}>
-                  {agent.connection_status}
-                </span>
-              </div>
-              <p className="text-[9px] text-slate-600 font-mono tracking-widest uppercase">{agent.id}</p>
-            </div>
-          </div>
+    <div className="flex-1 h-full overflow-hidden flex flex-col bg-[#05070a]">
+      {/* Top Intelligence Strip */}
+      <div className="shrink-0 h-16 border-b border-slate-800/50 bg-slate-900/20 backdrop-blur-md flex items-center justify-between px-8 z-30">
+        <div className="flex items-center gap-6">
+          <button 
+            onClick={() => navigate(-1)}
+            className="p-2 rounded-xl hover:bg-white/5 text-slate-500 hover:text-white transition-all group"
+          >
+            <ChevronLeft className="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" />
+          </button>
           
-          <div className="flex gap-2">
-            <button 
-              onClick={() => handleQuickAction('system_info', {})}
-              className="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-400 text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-2"
-            >
-              <RefreshCw className="w-3 h-3" />
-              Refresh
-            </button>
-            <button 
-              onClick={handleKillAgent}
-              className="px-3 py-1.5 rounded-lg bg-red-500/5 border border-red-500/10 hover:bg-red-500/20 text-red-500/70 hover:text-red-400 text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-2"
-            >
-              <Trash2 className="w-3 h-3" />
-              Kill
-            </button>
+          <div className="h-8 w-px bg-slate-800/50" />
+
+          <div>
+            <h1 className="text-sm font-black text-white tracking-wider font-mono uppercase">NODE::{agent.hostname}</h1>
+            <p className="text-[10px] font-bold text-slate-500 font-mono mt-0.5 uppercase tracking-tighter opacity-50 truncate max-w-[200px]">{agent.id}</p>
           </div>
         </div>
 
-        <div className="flex border-b border-slate-900 gap-6">
-          {['console', 'processes', 'files', 'network'].map((tab) => (
-            <button 
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`pb-3 text-[10px] font-black uppercase tracking-[0.15em] transition-all border-b-2 ${
-                activeTab === tab 
-                  ? 'text-primary border-primary' 
-                  : 'text-slate-600 border-transparent hover:text-slate-300'
-              }`}
-            >
-              {tab === 'console' ? 'Console' : tab === 'processes' ? 'Processes' : tab === 'files' ? 'Explorer' : 'Network'}
-            </button>
-          ))}
+        <div className="flex items-center gap-12">
+          <div className="hidden xl:flex flex-col items-end border-r border-slate-800 pr-12">
+            <span className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-1">Status Intelligence</span>
+            <div className="flex items-center gap-3">
+              <div className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest ${
+                agent.connection_status === 'online' ? 'bg-success/10 text-success' : 'bg-slate-800 text-slate-500'
+              }`}>
+                {agent.connection_status}
+              </div>
+              <div className="w-1.5 h-1.5 rounded-full bg-slate-800" />
+              <span className="text-[11px] font-mono text-slate-400">{agent.ip_address || '0.0.0.0'}</span>
+            </div>
+          </div>
+
+          <div className="flex flex-col items-end">
+            <span className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-1">Last Contact</span>
+            <div className="flex items-center gap-2">
+              <Clock className="w-3 h-3 text-slate-600" />
+              <span className="text-[11px] font-mono text-slate-300">
+                {agent.last_seen ? formatDistanceToNow(new Date(agent.last_seen), { addSuffix: true }) : 'Never'}
+              </span>
+            </div>
+          </div>
+
+          <div className="h-10 w-px bg-slate-800 mx-2" />
+
+          <button 
+            onClick={handleKillAgent}
+            className="px-6 py-2.5 rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all border border-red-500/20 font-black text-[10px] uppercase tracking-[0.2em] shadow-lg shadow-red-500/5"
+          >
+            Kill Node
+          </button>
         </div>
       </div>
 
-      {/* Main Multi-Pane Grid */}
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-4 gap-6 min-h-0 overflow-hidden">
-        {/* Left Sidebar: Scrolls independently */}
-        <div className="lg:col-span-1 space-y-6 overflow-y-auto scrollbar-none pb-6">
-          {/* System Info */}
-          <div className="card p-5 space-y-4">
-            <h3 className="text-sm font-bold flex items-center gap-2 text-white">
-              <Activity className="w-4 h-4 text-primary" />
-              System Meta
-            </h3>
-            <div className="space-y-1">
-              <div className="flex items-center justify-between py-1.5">
-                <span className="text-slate-500 text-[11px] font-bold uppercase tracking-wider">OS</span>
-                <span className="text-white font-mono text-xs">{agent.os}</span>
+      {/* Main Content Area */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Left Sidebar: Asset Intelligence */}
+        <div className="w-80 border-r border-slate-800/50 flex flex-col bg-slate-900/10 overflow-y-auto scrollbar-thin">
+          <div className="p-6 space-y-6">
+            {/* System Specs */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Asset Intelligence</span>
+                <ShieldCheck className="w-3.5 h-3.5 text-primary/50" />
               </div>
-              <div className="flex items-center justify-between py-1.5">
-                <span className="text-slate-500 text-[11px] font-bold uppercase tracking-wider">Arch</span>
-                <span className="text-white font-mono text-xs">{agent.arch}</span>
-              </div>
-              <div className="flex items-center justify-between py-1.5">
-                <span className="text-slate-500 text-[11px] font-bold uppercase tracking-wider">PID</span>
-                <span className="text-white font-mono text-xs">{agent.pid}</span>
-              </div>
-            </div>
-            <div className="pt-3 border-t border-slate-800">
-              <p className="text-slate-500 text-[9px] uppercase tracking-[0.2em] font-bold mb-2">Endpoint IP</p>
-              <div className="bg-black/20 p-2 rounded border border-slate-800 text-[10px] font-mono text-primary">
-                {agent.ip_address}
-              </div>
-            </div>
-          </div>
-
-          {/* Quick Actions / Modules */}
-          <div className="card p-5 space-y-4">
-            <h3 className="text-sm font-bold flex items-center gap-2 text-white">
-              <Zap className="w-4 h-4 text-amber-400" />
-              Quick Actions
-            </h3>
-            <div className="grid grid-cols-3 gap-2">
-              <button 
-                onClick={() => handleQuickAction('screenshot', {})}
-                className="flex flex-col items-center justify-center p-2 rounded-lg bg-slate-900/50 border border-slate-800 hover:border-primary/50 hover:bg-primary/5 transition-all group"
-                title="Capture screen"
-              >
-                <Monitor className="w-4 h-4 mb-1 text-slate-500 group-hover:text-primary" />
-                <span className="text-[9px] font-bold uppercase tracking-tighter text-slate-500 group-hover:text-white">Cap</span>
-              </button>
-              <button 
-                onClick={() => handleQuickAction('ps_json', {})}
-                className="flex flex-col items-center justify-center p-2 rounded-lg bg-slate-900/50 border border-slate-800 hover:border-primary/50 hover:bg-primary/5 transition-all group"
-                title="List processes"
-              >
-                <Cpu className="w-4 h-4 mb-1 text-slate-500 group-hover:text-primary" />
-                <span className="text-[9px] font-bold uppercase tracking-tighter text-slate-500 group-hover:text-white">Proc</span>
-              </button>
-              <button 
-                onClick={() => handleQuickAction('ls_json', { path: '.' })}
-                className="flex flex-col items-center justify-center p-2 rounded-lg bg-slate-900/50 border border-slate-800 hover:border-primary/50 hover:bg-primary/5 transition-all group"
-                title="Browse files"
-              >
-                <Folder className="w-4 h-4 mb-1 text-slate-500 group-hover:text-primary" />
-                <span className="text-[9px] font-bold uppercase tracking-tighter text-slate-500 group-hover:text-white">Files</span>
-              </button>
-              <button 
-                onClick={() => handleQuickAction('netstat_json', {})}
-                className="flex flex-col items-center justify-center p-2 rounded-lg bg-slate-900/50 border border-slate-800 hover:border-primary/50 hover:bg-primary/5 transition-all group"
-                title="Network status"
-              >
-                <Wifi className="w-4 h-4 mb-1 text-slate-500 group-hover:text-primary" />
-                <span className="text-[9px] font-bold uppercase tracking-tighter text-slate-500 group-hover:text-white">Net</span>
-              </button>
-              <button 
-                onClick={() => handleQuickAction('getprivs', {})}
-                className="flex flex-col items-center justify-center p-2 rounded-lg bg-slate-900/50 border border-slate-800 hover:border-primary/50 hover:bg-primary/5 transition-all group"
-                title="Check privileges"
-              >
-                <Activity className="w-4 h-4 mb-1 text-slate-500 group-hover:text-primary" />
-                <span className="text-[9px] font-bold uppercase tracking-tighter text-slate-500 group-hover:text-white">Privs</span>
-              </button>
-              <button 
-                onClick={() => {
-                  const url = prompt('Enter URL to download from:');
-                  const path = prompt('Enter local destination path:');
-                  if(url && path) handleQuickAction('download_url', { url, path })
-                }}
-                className="flex flex-col items-center justify-center p-2 rounded-lg bg-slate-900/50 border border-slate-800 hover:border-primary/50 hover:bg-primary/5 transition-all group"
-                title="Download file"
-              >
-                <ArrowDown className="w-4 h-4 mb-1 text-slate-500 group-hover:text-primary" />
-                <span className="text-[9px] font-bold uppercase tracking-tighter text-slate-500 group-hover:text-white">Pull</span>
-              </button>
-            </div>
-          </div>
-
-            <div className="card p-6 bg-slate-900/30">
-              <h3 className="text-sm font-bold uppercase tracking-widest text-slate-400 mb-6 flex items-center gap-2">
-                <Activity className="w-4 h-4 text-blue-400" />
-                System Meta
-              </h3>
-              <div className="space-y-4">
-                <MetaRow icon={<Monitor className="w-4 h-4" />} label="OS" value={agent.os} />
-                <MetaRow icon={<Cpu className="w-4 h-4" />} label="Arch" value={agent.arch} />
-                <MetaRow icon={<TerminalIcon className="w-4 h-4" />} label="PID" value={agent.pid} />
-                <MetaRow icon={<HardDrive className="w-4 h-4" />} label="Drive" value={`${agent.os === 'windows' ? 'C:' : '/'}`} />
-              </div>
-
-            </div>
-            
-            <div className="mt-8 pt-8 border-t border-slate-800/50">
-              <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">Environment</h3>
-              <div className="bg-black/40 rounded-xl p-4 font-mono text-[10px] text-slate-400 leading-relaxed">
-                USER: {agent.username}<br/>
-                HOST: {agent.hostname}<br/>
-                IP: {agent.ip_address}
-              </div>
-            </div>
-
-            <div className="card p-6 border-blue-500/20 bg-blue-500/5">
-              <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-blue-400 mb-4">Active Modules</h3>
+              
               <div className="space-y-2">
-                {['PS_JSON', 'LS_JSON', 'NET_MAP', 'SCREEN'].map(mod => (
-                  <div key={mod} className="flex items-center justify-between text-[10px] font-bold">
-                    <span className="text-slate-500">{mod}</span>
-                    <span className="text-success">LOADED</span>
+                {[
+                  { label: 'OS Platform', value: agent.os, icon: Monitor },
+                  { label: 'Architecture', value: agent.arch, icon: Cpu },
+                  { label: 'Process ID', value: agent.pid, icon: Activity },
+                  { label: 'Integrity', value: 'Level 4 (System)', icon: ShieldCheck },
+                ].map((item, i) => (
+                  <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-slate-900/40 border border-slate-800/50 group hover:border-primary/20 transition-all">
+                    <div className="flex items-center gap-3">
+                      <item.icon className="w-3.5 h-3.5 text-slate-600 group-hover:text-primary transition-colors" />
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{item.label}</span>
+                    </div>
+                    <span className="text-[11px] font-mono text-white/80">{item.value}</span>
                   </div>
                 ))}
               </div>
             </div>
+
+            {/* Tactical Actions */}
+            <div className="space-y-4 pt-4 border-t border-slate-800/50">
+              <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Quick Dispatch</span>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { label: 'Screenshot', icon: Monitor, type: 'screenshot' },
+                  { label: 'Shell Info', icon: TerminalIcon, type: 'system_info' },
+                  { label: 'Net Check', icon: Wifi, type: 'netstat_json' },
+                  { label: 'Process Sc', icon: Cpu, type: 'ps_json' },
+                ].map((action, i) => (
+                  <button
+                    key={i}
+                    onClick={() => handleQuickAction(action.type, {})}
+                    className="flex flex-col items-center justify-center gap-3 p-4 rounded-xl bg-slate-900/40 border border-slate-800/50 hover:border-primary/40 hover:bg-primary/5 transition-all group"
+                  >
+                    <action.icon className="w-5 h-5 text-slate-500 group-hover:text-primary transition-colors" />
+                    <span className="text-[10px] font-bold text-slate-500 group-hover:text-slate-300 uppercase tracking-widest">{action.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Advanced Operations */}
+            <div className="space-y-4 pt-4 border-t border-slate-800/50">
+              <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">High-Risk Ops</span>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => handleQuickAction('persist', {})}
+                  className="flex items-center gap-3 p-3 rounded-xl bg-slate-900/40 border border-slate-800/50 hover:border-emerald-500/40 hover:bg-emerald-500/5 transition-all group"
+                >
+                  <ShieldAlert className="w-4 h-4 text-slate-500 group-hover:text-emerald-500 transition-colors" />
+                  <span className="text-[10px] font-bold text-slate-500 group-hover:text-slate-300 uppercase tracking-widest">Persist</span>
+                </button>
+                <button
+                  onClick={() => {
+                    if(confirm('WARNING: Self-destruct will remove the agent binary and all traces from the target system. Proceed?')) {
+                      handleQuickAction('self_destruct', {});
+                    }
+                  }}
+                  className="flex items-center gap-3 p-3 rounded-xl bg-slate-900/40 border border-slate-800/50 hover:border-red-500/40 hover:bg-red-500/5 transition-all group"
+                >
+                  <Bomb className="w-4 h-4 text-slate-500 group-hover:text-red-500 transition-colors" />
+                  <span className="text-[10px] font-bold text-slate-500 group-hover:text-slate-300 uppercase tracking-widest">Purge</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Health Monitor */}
+            <div className="p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/10">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-[10px] font-black text-emerald-500/70 uppercase tracking-widest">Connectivity</span>
+                <Wifi className="w-3.5 h-3.5 text-emerald-500/50" />
+              </div>
+              <div className="h-1.5 w-full bg-emerald-500/10 rounded-full overflow-hidden">
+                <div className="h-full bg-emerald-500 w-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+              </div>
+              <p className="text-[9px] text-emerald-500/60 font-bold mt-2 uppercase tracking-tighter">Stable Beacon • {agent.beacon_interval}s Interval</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Right Module: Interaction Workspace */}
+        <div className="flex-1 flex flex-col min-w-0 bg-slate-950/20">
+          {/* Module Navigation */}
+          <div className="h-12 border-b border-slate-800/50 bg-slate-900/40 flex items-center px-6 gap-8 shrink-0">
+            {[
+              { id: 'console', label: 'Tactical Console', icon: TerminalIcon },
+              { id: 'processes', label: 'Process Audit', icon: Cpu },
+              { id: 'files', label: 'File Exfiltrator', icon: Folder },
+              { id: 'network', label: 'Network Graph', icon: Globe },
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2 h-full border-b-2 transition-all ${
+                  activeTab === tab.id 
+                    ? 'border-primary text-white' 
+                    : 'border-transparent text-slate-500 hover:text-slate-300'
+                }`}
+              >
+                <tab.icon className={`w-3.5 h-3.5 ${activeTab === tab.id ? 'text-primary' : 'text-slate-600'}`} />
+                <span className="text-[10px] font-black uppercase tracking-[0.15em]">{tab.label}</span>
+              </button>
+            ))}
           </div>
 
-          {/* Middle Column: Interaction Area (Scrolls independently) */}
-          <div className="lg:col-span-3 flex flex-col overflow-hidden">
+          {/* Module Content */}
+          <div className="flex-1 overflow-hidden relative flex flex-col">
             {activeTab === 'console' && (
-            <div className="card flex-1 flex flex-col overflow-hidden relative border-slate-800/50">
+              <div className="card flex-1 flex flex-col overflow-hidden relative border-slate-800/50 bg-slate-950/40">
               <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-900/40 shrink-0">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-primary/10 rounded-lg border border-primary/20">
@@ -415,18 +500,53 @@ const AgentDetailPage = () => {
                     <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
                     {agent.beacon_interval}s interval
                   </div>
+                  <div className="h-4 w-px bg-slate-800 mx-2" />
+                  <button 
+                    onClick={() => {
+                      if(confirm('Clear console output?')) {
+                        const lastId = results.length > 0 ? results[results.length - 1].id : null;
+                        setLastClearedResultId(lastId);
+                        if (lastId) {
+                          localStorage.setItem(`clear_id_${id}`, lastId);
+                        }
+                        addToast('Console cleared', 'info');
+                      }
+                    }}
+                    className="p-1.5 rounded hover:bg-white/5 text-slate-500 hover:text-white transition-colors flex items-center gap-2 group"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 group-hover:text-error transition-colors" />
+                    <span className="text-[10px] font-bold uppercase tracking-widest">Clear</span>
+                  </button>
                 </div>
               </div>
               
-              <div className="flex-1 overflow-y-auto p-6 space-y-6 font-mono text-sm bg-black/30 scrollbar-thin scroll-smooth">
-                {results.length === 0 && pendingTasks.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center text-slate-600 opacity-20 select-none">
-                    <TerminalIcon className="w-16 h-16 mb-4" />
-                    <p className="text-xs uppercase tracking-[0.4em] font-bold">Awaiting Input</p>
-                  </div>
-                ) : (
-                  [...results, ...pendingTasks].sort((a, b) => new Date(a.created_at) - new Date(b.created_at)).map((res) => {
-                    const payload = JSON.parse(res.task_payload);
+              <div className="flex-1 overflow-y-auto p-4 space-y-3 font-mono scrollbar-thin bg-black/40">
+                {(() => {
+                  const clearIndex = lastClearedResultId ? results.findIndex(r => r.id === lastClearedResultId) : -1;
+                  let visibleResults = results;
+                  if (lastClearedResultId) {
+                    visibleResults = clearIndex !== -1 ? results.slice(clearIndex + 1) : [];
+                  }
+                  
+                  const visibleEntries = [...visibleResults, ...pendingTasks]
+                    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+                  
+                  if (visibleEntries.length === 0) {
+                    return (
+                      <div className="h-full flex flex-col items-center justify-center text-slate-600 opacity-20 select-none">
+                        <TerminalIcon className="w-16 h-16 mb-4" />
+                        <p className="text-xs uppercase tracking-[0.4em] font-bold">Awaiting Input</p>
+                      </div>
+                    );
+                  }
+
+                  return visibleEntries.map((res) => {
+                    let payload = {};
+                    try {
+                      payload = typeof res.task_payload === 'string' ? JSON.parse(res.task_payload) : (res.task_payload || {});
+                    } catch (e) {
+                      console.warn("Failed to parse task payload", e);
+                    }
                     const isPending = res.status === 'pending';
                     
                     return (
@@ -458,8 +578,8 @@ const AgentDetailPage = () => {
                         </div>
                       </div>
                     );
-                  })
-                )}
+                  });
+                })()}
                 <div ref={resultEndRef} />
               </div>
 
@@ -472,7 +592,7 @@ const AgentDetailPage = () => {
                 </button>
               )}
 
-              <form onSubmit={handleRunCommand} className="p-6 bg-slate-900/50 border-t border-slate-800 shrink-0">
+              <form onSubmit={handleCommand} className="p-6 bg-slate-900/50 border-t border-slate-800 shrink-0">
                 <div className="relative group">
                   <div className="absolute inset-y-0 left-5 flex items-center pointer-events-none">
                     <span className="text-primary font-bold text-lg">$</span>
@@ -481,6 +601,7 @@ const AgentDetailPage = () => {
                     type="text"
                     value={command}
                     onChange={(e) => setCommand(e.target.value)}
+                    onKeyDown={handleKeyDown}
                     placeholder="Enter system command..."
                     className="w-full bg-slate-950/50 border-2 border-slate-800 rounded-2xl pl-12 pr-32 py-4 text-white outline-none focus:border-primary/50 focus:bg-slate-950 transition-all font-mono text-base placeholder:text-slate-700"
                     disabled={executing}
@@ -501,63 +622,93 @@ const AgentDetailPage = () => {
           )}
 
           {activeTab === 'processes' && (
-            <div className="card flex-1 flex flex-col overflow-hidden relative">
-              <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-900/40 shrink-0">
+            <div className="card flex-1 flex flex-col overflow-hidden relative border-slate-800/50">
+              <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/40 shrink-0 gap-4">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-primary/10 rounded-lg border border-primary/20">
                     <Cpu className="w-4 h-4 text-primary" />
                   </div>
-                  <span className="text-sm font-bold text-white">Process Manager</span>
+                  <div>
+                    <span className="text-sm font-bold text-white block leading-none">Process Manager</span>
+                    <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                      {getLatestPsResult() ? `${getLatestPsResult().filter(p => p.name.toLowerCase().includes(psSearchQuery.toLowerCase())).length} Active` : 'Scanning...'}
+                    </span>
+                  </div>
                 </div>
+
+                <div className="flex-1 max-w-sm relative">
+                  <input 
+                    type="text" 
+                    placeholder="Search binaries..."
+                    value={psSearchQuery}
+                    onChange={(e) => setPsSearchQuery(e.target.value)}
+                    className="w-full bg-black/40 border border-slate-800 rounded-lg pl-9 pr-4 py-1.5 text-xs text-white outline-none focus:border-primary/50 transition-all"
+                  />
+                  <RefreshCw className={`absolute left-3 top-2 w-3.5 h-3.5 text-slate-600 ${pendingTasks.some(t => t.task_type === 'ps_json') ? 'animate-spin' : ''}`} />
+                </div>
+
                 <button 
                   onClick={() => handleQuickAction('ps_json', {})}
                   disabled={pendingTasks.some(t => t.task_type === 'ps_json')}
-                  className="btn btn-primary text-xs px-4 rounded-lg"
+                  className="px-3 py-1.5 rounded-lg bg-primary text-white text-[10px] font-bold uppercase tracking-wider hover:bg-primary-hover transition-all flex items-center gap-2"
                 >
-                  {pendingTasks.some(t => t.task_type === 'ps_json') ? (
-                    <><RefreshCw className="w-4 h-4 animate-spin" /> Scanning</>
-                  ) : (
-                    <><RefreshCw className="w-4 h-4" /> Refresh</>
-                  )}
+                  <RefreshCw className={`w-3 h-3 ${pendingTasks.some(t => t.task_type === 'ps_json') ? 'animate-spin' : ''}`} />
+                  {pendingTasks.some(t => t.task_type === 'ps_json') ? 'Scanning' : 'Refresh'}
                 </button>
               </div>
               
-              <div className={`flex-1 overflow-y-auto scrollbar-thin transition-opacity duration-500 ${pendingTasks.some(t => t.task_type === 'ps_json') ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
-                <table className="w-full text-left text-sm border-collapse">
-                  <thead className="bg-slate-900/50 text-slate-500 sticky top-0 z-10">
+              <div className="flex-1 overflow-y-auto scrollbar-thin">
+                <table className="w-full text-left text-[11px] border-collapse">
+                  <thead className="bg-slate-900/80 text-slate-500 sticky top-0 z-10 backdrop-blur-md">
                     <tr>
-                      <th className="p-5 border-b border-slate-800 font-bold uppercase text-xs tracking-wider">PID</th>
-                      <th className="p-5 border-b border-slate-800 font-bold uppercase text-xs tracking-wider">Process Name</th>
-                      <th className="p-5 border-b border-slate-800 font-bold uppercase text-xs tracking-wider">Threads</th>
-                      <th className="p-5 border-b border-slate-800 font-bold uppercase text-xs tracking-wider text-right">Action</th>
+                      <th className="px-5 py-2.5 border-b border-slate-800 font-bold uppercase tracking-wider w-20">PID</th>
+                      <th className="px-5 py-2.5 border-b border-slate-800 font-bold uppercase tracking-wider">Process</th>
+                      <th className="px-5 py-2.5 border-b border-slate-800 font-bold uppercase tracking-wider w-24">Threads</th>
+                      <th className="px-5 py-2.5 border-b border-slate-800 font-bold uppercase tracking-wider text-right w-24">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/50">
                     {getLatestPsResult() ? (
-                      getLatestPsResult().sort((a, b) => a.pid - b.pid).map((proc) => (
-                        <tr key={proc.pid} className="hover:bg-primary/5 transition-colors group">
-                          <td className="p-5 font-mono text-primary text-sm font-semibold">{proc.pid}</td>
-                          <td className="p-5 font-medium text-slate-200">{proc.name}</td>
-                          <td className="p-5 text-slate-500 font-mono text-sm">{proc.threads || '-'}</td>
-                          <td className="p-5 text-right">
-                            <button 
-                              onClick={() => {
-                                if(confirm(`Kill process ${proc.name} (${proc.pid})?`)) {
-                                  handleQuickAction('kill', { pid: proc.pid });
-                                }
-                              }}
-                              className="p-2.5 rounded-lg hover:bg-error/20 text-slate-600 hover:text-error transition-all"
-                              title="Kill process"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))
+                      getLatestPsResult()
+                        .filter(p => p.name.toLowerCase().includes(psSearchQuery.toLowerCase()))
+                        .sort((a, b) => a.pid - b.pid)
+                        .map((proc) => {
+                          const isSelf = Number(proc.pid) === Number(agent.pid);
+                          return (
+                            <tr key={proc.pid} className={`hover:bg-white/5 transition-colors group ${isSelf ? 'bg-primary/5' : ''}`}>
+                              <td className={`px-5 py-2.5 font-mono font-bold ${isSelf ? 'text-primary' : 'text-slate-500'}`}>
+                                {proc.pid}
+                              </td>
+                              <td className="px-5 py-2.5">
+                                <div className="flex items-center gap-2">
+                                  <span className={`font-semibold ${isSelf ? 'text-white' : 'text-slate-200'}`}>{proc.name}</span>
+                                  {isSelf && (
+                                    <span className="px-1.5 py-0.5 rounded bg-primary/20 text-primary text-[8px] font-black uppercase tracking-widest border border-primary/20">Self</span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-5 py-2.5 font-mono text-slate-500">{proc.threads || '-'}</td>
+                              <td className="px-5 py-2.5 text-right">
+                                <button 
+                                  onClick={() => {
+                                    if(confirm(`Kill process ${proc.name} (${proc.pid})?`)) {
+                                      handleQuickAction('kill', { pid: proc.pid });
+                                    }
+                                  }}
+                                  className="p-1.5 rounded-lg hover:bg-red-500/10 text-slate-600 hover:text-red-400 transition-all opacity-0 group-hover:opacity-100"
+                                  title="Kill process"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })
                     ) : (
                       <tr>
-                        <td colSpan="4" className="p-20 text-center text-slate-600 italic uppercase tracking-wider font-bold text-sm">
-                          No Process Data Available
+                        <td colSpan="4" className="py-20 text-center">
+                          <Loader2 className="w-6 h-6 text-primary animate-spin mx-auto mb-4" />
+                          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Awaiting Process Stream...</p>
                         </td>
                       </tr>
                     )}
@@ -568,141 +719,194 @@ const AgentDetailPage = () => {
           )}
 
           {activeTab === 'files' && (
-            <div className="card flex-1 flex flex-col overflow-hidden relative">
-              <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-900/40 shrink-0">
+            <div className="card flex-1 flex flex-col overflow-hidden relative border-slate-800/50">
+              <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/40 shrink-0 gap-4">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-primary/10 rounded-lg border border-primary/20">
                     <Folder className="w-4 h-4 text-primary" />
                   </div>
-                  <span className="text-sm font-bold text-white">File Browser</span>
+                  <div>
+                    <span className="text-sm font-bold text-white block leading-none">File Explorer</span>
+                    <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                      {getLatestLsResult() ? `${getLatestLsResult().files.filter(f => f.name.toLowerCase().includes(fileSearchQuery.toLowerCase())).length} Items` : 'Navigating...'}
+                    </span>
+                  </div>
                 </div>
+
+                <div className="flex-1 max-w-sm relative">
+                  <input 
+                    type="text" 
+                    placeholder="Search current directory..."
+                    value={fileSearchQuery}
+                    onChange={(e) => setFileSearchQuery(e.target.value)}
+                    className="w-full bg-black/40 border border-slate-800 rounded-lg pl-9 pr-4 py-1.5 text-xs text-white outline-none focus:border-primary/50 transition-all"
+                  />
+                  <RefreshCw className={`absolute left-3 top-2 w-3.5 h-3.5 text-slate-600 ${pendingTasks.some(t => t.task_type === 'ls') ? 'animate-spin' : ''}`} />
+                </div>
+
                 <div className="flex gap-2">
                   <button 
-                    onClick={() => handleQuickAction('ls_json', { path: getLatestLsResult()?.path || '.' })}
-                    disabled={pendingTasks.some(t => t.task_type === 'ls_json')}
-                    className="btn btn-secondary text-xs px-3 rounded-lg"
+                    onClick={() => handleQuickAction('ls', { path: getLatestLsResult()?.path || '.' })}
+                    disabled={pendingTasks.some(t => t.task_type === 'ls')}
+                    className="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-400 text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-2"
                   >
-                    {pendingTasks.some(t => t.task_type === 'ls_json') ? (
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                    ) : <RefreshCw className="w-4 h-4" />}
+                    <RefreshCw className={`w-3 h-3 ${pendingTasks.some(t => t.task_type === 'ls') ? 'animate-spin' : ''}`} />
+                    Refresh
                   </button>
                   <button 
-                    onClick={() => {
-                      const path = prompt('Enter path to browse:');
-                      if(path) handleQuickAction('ls_json', { path });
-                    }}
-                    className="btn btn-primary text-xs px-4 rounded-lg"
+                    onClick={() => {/* TODO: Implement Upload Modal */}}
+                    className="px-3 py-1.5 rounded-lg bg-primary text-white text-[10px] font-bold uppercase tracking-wider hover:bg-primary-hover transition-all flex items-center gap-2"
                   >
-                    Go to Path
+                    <ArrowDown className="w-3 h-3" />
+                    Upload
                   </button>
                 </div>
               </div>
 
-              {/* Breadcrumbs */}
-              <div className="px-6 py-3 bg-slate-900/30 border-b border-slate-800 flex items-center gap-3 overflow-x-auto text-xs font-bold tracking-wider uppercase shrink-0 scrollbar-none">
-                <HardDrive className="w-4 h-4 text-slate-600 flex-shrink-0" />
-                {getLatestLsResult()?.path ? (
-                  getLatestLsResult().path.replace(/\\/g, '/').split('/').filter(Boolean).map((part, idx, arr) => (
-                    <React.Fragment key={idx}>
-                      <button 
-                        onClick={() => {
-                          const targetPath = getLatestLsResult().path.replace(/\\/g, '/').split('/').slice(0, idx + 1).join('/') || '/';
-                          handleQuickAction('ls_json', { path: targetPath });
-                        }}
-                        className="text-slate-500 hover:text-primary transition-colors whitespace-nowrap"
-                      >
-                        {part}
-                      </button>
-                      {idx < arr.length - 1 && <ChevronRight className="w-3 h-3 text-slate-800" />}
-                    </React.Fragment>
-                  ))
-                ) : (
-                  <span className="text-slate-700 italic">No Path Context</span>
-                )}
+              {/* Breadcrumbs Navigation */}
+              <div className="px-4 py-2 bg-black/20 border-b border-slate-800/50 flex items-center gap-2 shrink-0">
+                <button 
+                  onClick={() => handleQuickAction('ls', { path: agent.os === 'windows' ? 'C:\\' : '/' })}
+                  className="p-1 rounded hover:bg-white/5 text-slate-500 hover:text-white transition-colors"
+                >
+                  <HardDrive className="w-3 h-3" />
+                </button>
+                <ChevronRight className="w-3 h-3 text-slate-700" />
+                <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-1">
+                  {(getLatestLsResult()?.path || '').split(/[\\/]/).filter(Boolean).map((part, idx, arr) => {
+                    const isWindows = (getLatestLsResult()?.path || '').includes('\\') || agent.os === 'windows';
+                    const separator = isWindows ? '\\' : '/';
+                    
+                    return (
+                      <React.Fragment key={idx}>
+                        <button 
+                          onClick={() => {
+                            let targetPath = arr.slice(0, idx + 1).join(separator);
+                            // Add leading slash for linux if not a windows drive
+                            if (!isWindows) {
+                              targetPath = '/' + targetPath;
+                            } else if (targetPath.length === 2 && targetPath.endsWith(':')) {
+                                targetPath = targetPath + '\\'; // Handle C: -> C:\
+                            }
+                            handleQuickAction('ls', { path: targetPath });
+                          }}
+                          className="text-[10px] font-bold text-slate-400 hover:text-primary transition-colors whitespace-nowrap px-1 rounded hover:bg-white/5"
+                        >
+                          {part}
+                        </button>
+                        {idx < arr.length - 1 && <ChevronRight className="w-3 h-3 text-slate-700 shrink-0" />}
+                      </React.Fragment>
+                    );
+                  })}
+                </div>
               </div>
               
-              <div className={`flex-1 overflow-y-auto scrollbar-thin transition-opacity duration-500 ${pendingTasks.some(t => t.task_type === 'ls_json') ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
-                <table className="w-full text-left text-sm border-collapse">
-                  <thead className="bg-slate-900/50 text-slate-500 sticky top-0 z-10">
+              <div className="flex-1 overflow-y-auto scrollbar-thin">
+                <table className="w-full text-left text-[11px] border-collapse">
+                  <thead className="bg-slate-900/80 text-slate-500 sticky top-0 z-10 backdrop-blur-md">
                     <tr>
-                      <th className="p-5 border-b border-slate-800 font-bold uppercase text-xs tracking-wider w-12 text-center">Type</th>
-                      <th className="p-5 border-b border-slate-800 font-bold uppercase text-xs tracking-wider">Name</th>
-                      <th className="p-5 border-b border-slate-800 font-bold uppercase text-xs tracking-wider">Size</th>
-                      <th className="p-5 border-b border-slate-800 font-bold uppercase text-xs tracking-wider text-right">Actions</th>
+                      <th className="px-5 py-2.5 border-b border-slate-800 font-bold uppercase tracking-wider">Name</th>
+                      <th className="px-5 py-2.5 border-b border-slate-800 font-bold uppercase tracking-wider w-24">Size</th>
+                      <th className="px-5 py-2.5 border-b border-slate-800 font-bold uppercase tracking-wider w-32">Modified</th>
+                      <th className="px-5 py-2.5 border-b border-slate-800 font-bold uppercase tracking-wider text-right w-24">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800/50">
-                    {getLatestLsResult() ? (
-                      [...getLatestLsResult().files].sort((a, b) => {
-                        if (a.is_dir && !b.is_dir) return -1;
-                        if (!a.is_dir && b.is_dir) return 1;
-                        return a.name.localeCompare(b.name);
-                      }).map((file) => (
-                        <tr 
-                          key={file.name} 
-                          className="hover:bg-primary/5 transition-colors group cursor-pointer"
-                          onDoubleClick={() => {
-                            if (file.is_dir) {
-                              const separator = getLatestLsResult().path.includes('\\') ? '\\' : '/';
-                              handleQuickAction('ls_json', { path: `${getLatestLsResult().path}${separator}${file.name}` });
-                            }
-                          }}
-                        >
-                          <td className="p-5 text-center">
-                            {file.is_dir ? (
-                              <Folder className="w-5 h-5 text-amber-500/70" />
-                            ) : (
-                              <FileText className="w-5 h-5 text-slate-600" />
-                            )}
-                          </td>
-                          <td className="p-5">
-                            <div className="font-semibold text-slate-200 group-hover:text-primary transition-colors">
-                              {file.name}
-                            </div>
-                            <div className="text-xs text-slate-600 font-mono uppercase mt-1 tracking-tight">{file.mode}</div>
-                          </td>
-                          <td className="p-5 text-slate-500 font-mono text-sm">
-                            {file.is_dir ? '—' : formatFileSize(file.size)}
-                          </td>
-                          <td className="p-5 text-right">
-                            <div className="flex justify-end gap-2">
-                              {!file.is_dir && (
+                  <tbody className="divide-y divide-slate-800/50 relative">
+                    {pendingTasks.some(t => t.task_type === 'ls_json') && (
+                      <div className="absolute inset-0 z-20 bg-slate-950/60 backdrop-blur-sm flex flex-col items-center justify-center animate-in fade-in duration-300">
+                        <Loader2 className="w-8 h-8 text-primary animate-spin mb-4" />
+                        <span className="text-[10px] font-black text-white uppercase tracking-[0.3em]">Synchronizing...</span>
+                      </div>
+                    )}
+                    
+                    {!getLatestLsResult() ? (
+                      <tr>
+                        <td colSpan="4" className="py-20 text-center">
+                          <Loader2 className="w-6 h-6 text-primary animate-spin mx-auto mb-4" />
+                          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Awaiting Manifest...</p>
+                        </td>
+                      </tr>
+                    ) : (
+                      getLatestLsResult().files
+                        .filter(f => f.name.toLowerCase().includes(fileSearchQuery.toLowerCase()))
+                        .sort((a, b) => (b.is_dir ? 1 : 0) - (a.is_dir ? 1 : 0))
+                        .map((file, idx) => (
+                          <tr 
+                            key={idx} 
+                            className="hover:bg-white/5 transition-colors group cursor-pointer"
+                            onClick={() => {
+                              if(file.is_dir) {
+                                handleQuickAction('ls', { path: joinPath(getLatestLsResult().path, file.name) });
+                              }
+                            }}
+                          >
+                            <td className="px-5 py-2.5">
+                              <div className="flex items-center gap-3">
+                                <div className={`p-1.5 rounded ${
+                                  file.is_dir ? 'bg-amber-500/10 text-amber-500' : 
+                                  ['exe', 'dll', 'bat', 'sh', 'ps1'].includes(file.name.split('.').pop().toLowerCase()) ? 'bg-primary/10 text-primary' : 
+                                  ['txt', 'log', 'config', 'json', 'yaml', 'ini'].includes(file.name.split('.').pop().toLowerCase()) ? 'bg-emerald-500/10 text-emerald-500' :
+                                  'bg-slate-800 text-slate-500'
+                                }`}>
+                                  {file.is_dir ? <Folder className="w-3.5 h-3.5" /> : 
+                                   ['exe', 'dll', 'bat', 'sh', 'ps1'].includes(file.name.split('.').pop().toLowerCase()) ? <TerminalIcon className="w-3.5 h-3.5" /> :
+                                   ['txt', 'log', 'config', 'json', 'yaml', 'ini'].includes(file.name.split('.').pop().toLowerCase()) ? <FileText className="w-3.5 h-3.5" /> :
+                                   <Activity className="w-3.5 h-3.5" />}
+                                </div>
+                                <span className={`font-semibold ${file.is_dir ? 'text-slate-200' : 'text-slate-400'}`}>
+                                  {file.name}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="px-5 py-2.5 font-mono text-slate-500">
+                              {file.is_dir ? '--' : formatFileSize(file.size)}
+                            </td>
+                            <td className="px-5 py-2.5 text-slate-600 font-mono text-[10px]">
+                              {file.mod_time ? format(new Date(file.mod_time), 'yyyy-MM-dd HH:mm') : '--'}
+                            </td>
+                            <td className="px-5 py-2.5 text-right">
+                              <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                {!file.is_dir && (
+                                  <>
+                                    <button 
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleQuickAction('cat', { path: joinPath(getLatestLsResult().path, file.name) });
+                                        setActiveTab('console');
+                                      }}
+                                      className="p-1.5 rounded-lg hover:bg-primary/10 text-slate-500 hover:text-primary transition-all"
+                                      title="View Content"
+                                    >
+                                      <Monitor className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button 
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleQuickAction('download', { path: joinPath(getLatestLsResult().path, file.name) });
+                                      }}
+                                      className="p-1.5 rounded-lg hover:bg-emerald-500/10 text-slate-500 hover:text-emerald-400 transition-all"
+                                      title="Exfiltrate"
+                                    >
+                                      <ArrowDown className="w-3.5 h-3.5" />
+                                    </button>
+                                  </>
+                                )}
                                 <button 
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    const separator = getLatestLsResult().path.includes('\\') ? '\\' : '/';
-                                    handleQuickAction('cat', { path: `${getLatestLsResult().path}${separator}${file.name}` });
-                                    setActiveTab('console');
+                                    if(confirm(`Delete ${file.name}?`)) {
+                                      handleQuickAction('rm', { path: joinPath(getLatestLsResult().path, file.name) });
+                                    }
                                   }}
-                                  className="p-2.5 rounded-lg hover:bg-primary/20 text-slate-600 hover:text-primary transition-all"
-                                  title="View file"
+                                  className="p-1.5 rounded-lg hover:bg-red-500/10 text-slate-500 hover:text-red-400 transition-all"
+                                  title="Delete"
                                 >
-                                  <FileText className="w-4 h-4" />
+                                  <Trash2 className="w-3.5 h-3.5" />
                                 </button>
-                              )}
-                              <button 
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if(confirm(`Delete ${file.name}?`)) {
-                                    const separator = getLatestLsResult().path.includes('\\') ? '\\' : '/';
-                                    handleQuickAction('rm', { path: `${getLatestLsResult().path}${separator}${file.name}` });
-                                  }
-                                }}
-                                className="p-2.5 rounded-lg hover:bg-error/20 text-slate-600 hover:text-error transition-all"
-                                title="Delete file"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan="4" className="p-20 text-center text-slate-600 italic uppercase tracking-wider font-bold text-sm">
-                          No Files Available
-                        </td>
-                      </tr>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
                     )}
                   </tbody>
                 </table>
@@ -711,72 +915,98 @@ const AgentDetailPage = () => {
           )}
 
           {activeTab === 'network' && (
-            <div className="card flex-1 flex flex-col overflow-hidden relative">
-              <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-900/40 shrink-0">
+            <div className="card flex-1 flex flex-col overflow-hidden relative border-slate-800/50">
+              <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/40 shrink-0 gap-4">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-primary/10 rounded-lg border border-primary/20">
                     <Wifi className="w-4 h-4 text-primary" />
                   </div>
-                  <span className="text-sm font-bold text-white">Network Connections</span>
+                  <div>
+                    <span className="text-sm font-bold text-white block leading-none">Network Auditor</span>
+                    <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                      {getLatestNetstatResult() ? `${getLatestNetstatResult().filter(c => 
+                        c.local.includes(netSearchQuery) || c.remote.includes(netSearchQuery) || c.state.toLowerCase().includes(netSearchQuery.toLowerCase())
+                      ).length} Connections` : 'Scanning...'}
+                    </span>
+                  </div>
                 </div>
+
+                <div className="flex-1 max-w-sm relative">
+                  <input 
+                    type="text" 
+                    placeholder="Search IPs or Ports..."
+                    value={netSearchQuery}
+                    onChange={(e) => setNetSearchQuery(e.target.value)}
+                    className="w-full bg-black/40 border border-slate-800 rounded-lg pl-9 pr-4 py-1.5 text-xs text-white outline-none focus:border-primary/50 transition-all"
+                  />
+                  <RefreshCw className={`absolute left-3 top-2 w-3.5 h-3.5 text-slate-600 ${pendingTasks.some(t => t.task_type === 'netstat_json') ? 'animate-spin' : ''}`} />
+                </div>
+
                 <button 
                   onClick={() => handleQuickAction('netstat_json', {})}
                   disabled={pendingTasks.some(t => t.task_type === 'netstat_json')}
-                  className="btn btn-primary text-xs px-4 rounded-lg"
+                  className="px-3 py-1.5 rounded-lg bg-primary text-white text-[10px] font-bold uppercase tracking-wider hover:bg-primary-hover transition-all flex items-center gap-2"
                 >
-                  {pendingTasks.some(t => t.task_type === 'netstat_json') ? (
-                    <><RefreshCw className="w-4 h-4 animate-spin" /> Scanning</>
-                  ) : (
-                    <><Wifi className="w-4 h-4" /> Refresh</>
-                  )}
+                  <RefreshCw className={`w-3 h-3 ${pendingTasks.some(t => t.task_type === 'netstat_json') ? 'animate-spin' : ''}`} />
+                  {pendingTasks.some(t => t.task_type === 'netstat_json') ? 'Scanning' : 'Refresh'}
                 </button>
               </div>
               
-              <div className={`flex-1 overflow-y-auto scrollbar-thin transition-opacity duration-500 ${pendingTasks.some(t => t.task_type === 'netstat_json') ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
-                <table className="w-full text-left text-sm border-collapse">
-                  <thead className="bg-slate-900/50 text-slate-500 sticky top-0 z-10">
+              <div className="flex-1 overflow-y-auto scrollbar-thin">
+                <table className="w-full text-left text-[11px] border-collapse">
+                  <thead className="bg-slate-900/80 text-slate-500 sticky top-0 z-10 backdrop-blur-md">
                     <tr>
-                      <th className="p-5 border-b border-slate-800 font-bold uppercase text-xs tracking-wider">Protocol</th>
-                      <th className="p-5 border-b border-slate-800 font-bold uppercase text-xs tracking-wider">Local Address</th>
-                      <th className="p-5 border-b border-slate-800 font-bold uppercase text-xs tracking-wider">Remote Address</th>
-                      <th className="p-5 border-b border-slate-800 font-bold uppercase text-xs tracking-wider">State</th>
+                      <th className="px-5 py-2.5 border-b border-slate-800 font-bold uppercase tracking-wider w-20">Proto</th>
+                      <th className="px-5 py-2.5 border-b border-slate-800 font-bold uppercase tracking-wider">Local Address</th>
+                      <th className="px-5 py-2.5 border-b border-slate-800 font-bold uppercase tracking-wider">Remote Address</th>
+                      <th className="px-5 py-2.5 border-b border-slate-800 font-bold uppercase tracking-wider text-right w-24">Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/50">
                     {getLatestNetstatResult() ? (
-                      getLatestNetstatResult().map((conn, idx) => (
-                        <tr key={idx} className="hover:bg-primary/5 transition-colors group">
-                          <td className="p-5">
-                            <span className={`px-2.5 py-1 rounded text-xs font-bold ${
-                              conn.proto === 'TCP' ? 'bg-primary/10 text-primary' : 'bg-purple-500/10 text-purple-400'
-                            }`}>
-                              {conn.proto}
-                            </span>
-                          </td>
-                          <td className="p-5 font-mono text-sm text-slate-400">{conn.local}</td>
-                          <td className="p-5 font-mono text-sm text-slate-400">
-                            {conn.remote === '0.0.0.0:0' || conn.remote === '*:*' ? (
-                              <span className="text-slate-700 italic text-xs uppercase font-semibold tracking-tight">Listening</span>
-                            ) : (
-                              <span className={conn.state === 'ESTABLISHED' ? 'text-primary font-semibold' : 'text-slate-500'}>
-                                {conn.remote}
+                      getLatestNetstatResult()
+                        .filter(c => 
+                          c.local.includes(netSearchQuery) || 
+                          c.remote.includes(netSearchQuery) || 
+                          c.state.toLowerCase().includes(netSearchQuery.toLowerCase())
+                        )
+                        .map((conn, idx) => (
+                          <tr key={idx} className="hover:bg-white/5 transition-colors group">
+                            <td className="px-5 py-3">
+                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-black tracking-widest ${
+                                conn.proto === 'TCP' ? 'bg-primary/10 text-primary' : 'bg-purple-500/10 text-purple-400'
+                              }`}>
+                                {conn.proto}
                               </span>
-                            )}
-                          </td>
-                          <td className="p-5">
-                            <span className={`text-xs font-bold uppercase tracking-tight ${
-                              conn.state === 'ESTABLISHED' ? 'text-success' : 
-                              conn.state === 'LISTENING' ? 'text-amber-500/70' : 'text-slate-600'
-                            }`}>
-                              {conn.state}
-                            </span>
-                          </td>
-                        </tr>
-                      ))
+                            </td>
+                            <td className="px-5 py-3">
+                              <div className="flex flex-col">
+                                <span className="text-slate-200 font-mono">{conn.local.split(':')[0]}</span>
+                                <span className="text-primary text-[10px] font-bold">Port: {conn.local.split(':')[1]}</span>
+                              </div>
+                            </td>
+                            <td className="px-5 py-3">
+                              <div className="flex flex-col">
+                                <span className="text-slate-200 font-mono">{conn.remote.split(':')[0] || '*'}</span>
+                                <span className="text-slate-500 text-[10px] font-bold">Port: {conn.remote.split(':')[1] || '*'}</span>
+                              </div>
+                            </td>
+                            <td className="px-5 py-3 text-right">
+                              <span className={`px-2 py-1 rounded-full text-[9px] font-black uppercase tracking-[0.1em] ${
+                                conn.state === 'ESTABLISHED' ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' :
+                                conn.state === 'LISTENING' ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20' :
+                                'bg-slate-800 text-slate-500 border border-slate-700'
+                              }`}>
+                                {conn.state}
+                              </span>
+                            </td>
+                          </tr>
+                        ))
                     ) : (
                       <tr>
-                        <td colSpan="4" className="p-20 text-center text-slate-600 italic uppercase tracking-wider font-bold text-sm">
-                          No Network Data
+                        <td colSpan="4" className="py-20 text-center">
+                          <Loader2 className="w-6 h-6 text-primary animate-spin mx-auto mb-4" />
+                          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Auditing Active Sockets...</p>
                         </td>
                       </tr>
                     )}
@@ -785,7 +1015,27 @@ const AgentDetailPage = () => {
               </div>
             </div>
           )}
+          </div>
         </div>
+      </div>
+
+      {/* Floating Toast Notifications */}
+      <div className="fixed bottom-6 right-6 flex flex-col gap-3 z-50 pointer-events-none">
+        {toasts.map(toast => (
+          <div 
+            key={toast.id}
+            className={`pointer-events-auto flex items-center gap-3 px-5 py-4 rounded-2xl border backdrop-blur-xl shadow-2xl animate-in slide-in-from-right duration-500 ${
+              toast.type === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' :
+              toast.type === 'error' ? 'bg-red-500/10 border-red-500/20 text-red-400' :
+              'bg-slate-900/90 border-slate-800 text-slate-300'
+            }`}
+          >
+            {toast.type === 'success' ? <CheckCircle2 className="w-5 h-5" /> : 
+             toast.type === 'error' ? <AlertCircle className="w-5 h-5" /> : 
+             <Activity className="w-5 h-5" />}
+            <span className="text-xs font-bold uppercase tracking-wider">{toast.title}</span>
+          </div>
+        ))}
       </div>
     </div>
   );
