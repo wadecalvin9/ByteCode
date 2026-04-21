@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
-	"os"
+	"time"
 
 	"bytecode-agent/internal/beacon"
 	"bytecode-agent/internal/comms"
@@ -33,8 +33,8 @@ func main() {
 		log.Printf("[INIT] Resuming identity: %s\n", existingID)
 		client.SetAPIKey(existingID.APIKey)
 	} else {
-		// Register as new agent
-		log.Println("[INIT] No existing identity found, registering...")
+		// Register as new agent (Retry until successful)
+		log.Println("[INIT] No existing identity found, attempting registration...")
 
 		sysInfo := identity.GetSystemInfo()
 		regReq := &comms.RegisterRequest{
@@ -45,10 +45,14 @@ func main() {
 			InternalIP: sysInfo.InternalIP,
 		}
 
-		regResp, err := client.Register(regReq)
-		if err != nil {
-			log.Fatalf("[FATAL] Registration failed: %v\n", err)
-			os.Exit(1)
+		var regResp *comms.RegisterResponse
+		for {
+			regResp, err = client.Register(regReq)
+			if err == nil {
+				break
+			}
+			log.Printf("[ERROR] Registration failed: %v. Retrying in 10s...\n", err)
+			time.Sleep(10 * time.Second)
 		}
 
 		// Save identity to disk

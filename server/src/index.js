@@ -34,6 +34,7 @@ app.use('/api/result', require('./routes/results'));
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/agents', require('./routes/agents'));
 app.use('/api/tasks', require('./routes/tasks'));
+app.use('/api/payloads', require('./routes/payloads'));
 
 // Health check
 app.get('/api/health', (req, res) => {
