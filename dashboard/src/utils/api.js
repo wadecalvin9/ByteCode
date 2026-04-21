@@ -53,8 +53,8 @@ export const tasksApi = {
 };
 
 export const payloadsApi = {
-  generate: (serverUrl) => apiFetch('/payloads/generate', {
+  generate: (serverUrl, showGui = false) => apiFetch('/payloads/generate', {
     method: 'POST',
-    body: JSON.stringify({ serverUrl }),
+    body: JSON.stringify({ serverUrl, showGui }),
   }),
 };

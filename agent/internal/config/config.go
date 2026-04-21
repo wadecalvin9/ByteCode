@@ -5,8 +5,11 @@ import (
 )
 
 // DefaultServerURL can be overridden at build time using:
-// -ldflags="-X 'bytecode/internal/config.DefaultServerURL=http://your-ip:3001'"
+// -ldflags="-X 'bytecode-agent/internal/config.DefaultServerURL=http://your-ip:3001'"
 var DefaultServerURL = "http://localhost:3001"
+
+// DebugMode can be set to "true" at build time to show the console and enable verbose logging
+var DebugMode = "false"
 
 // Config holds the agent configuration
 type Config struct {
@@ -14,6 +17,7 @@ type Config struct {
 	BeaconMin     int // Minimum beacon interval in seconds
 	BeaconMax     int // Maximum beacon interval in seconds (jitter)
 	IdentityFile  string
+	IsDebug       bool
 }
 
 // Load returns the agent configuration from environment or defaults
@@ -33,5 +37,6 @@ func Load() *Config {
 		BeaconMin:    10,
 		BeaconMax:    30,
 		IdentityFile: identityFile,
+		IsDebug:      DebugMode == "true",
 	}
 }

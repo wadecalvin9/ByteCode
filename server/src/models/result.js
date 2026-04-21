@@ -25,7 +25,7 @@ class Result {
       FROM results r
       LEFT JOIN tasks t ON r.task_id = t.id
       WHERE r.agent_id = ?
-      ORDER BY r.created_at DESC
+      ORDER BY r.created_at ASC
     `).all(agentId);
   }
 

