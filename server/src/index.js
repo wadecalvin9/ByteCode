@@ -1,5 +1,4 @@
-require('dotenv').config();
-
+const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const { initializeDatabase } = require('./config/db');
@@ -47,9 +46,20 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// 404 handler
-app.use((req, res) => {
-  res.status(404).json({ error: 'Endpoint not found' });
+// ── Static Dashboard Files ─────────────────────────────
+// Locate dashboard/dist relative to this file
+const distPath = path.join(__dirname, '../../dashboard/dist');
+app.use(express.static(distPath));
+
+// Catch-all for SPA routing (must be after /api routes)
+app.get('*', (req, res, next) => {
+  if (req.url.startsWith('/api')) return next();
+  res.sendFile(path.join(distPath, 'index.html'));
+});
+
+// 404 handler for API
+app.use('/api', (req, res) => {
+  res.status(404).json({ error: 'API Endpoint not found' });
 });
 
 // Error handler
@@ -60,12 +70,17 @@ app.use((err, req, res, next) => {
 
 // ── Start ──────────────────────────────────────────────
 app.listen(PORT, () => {
-  console.log('');
-  console.log('  ╔══════════════════════════════════════════╗');
-  console.log('  ║     ByteCode Control Server v1.0.0       ║');
-  console.log('  ╠══════════════════════════════════════════╣');
-  console.log(`  ║  🌐 API:  http://localhost:${PORT}          ║`);
-  console.log('  ║  📡 Status: OPERATIONAL                  ║');
-  console.log('  ╚══════════════════════════════════════════╝');
+  console.log('\x1b[36m');
+  console.log('  ██████╗ ██╗   ██╗████████╗███████╗ ██████╗  ██████╗ ██████╗ ███████╗');
+  console.log('  ██╔══██╗╚██╗ ██╔╝╚══██╔══╝██╔════╝██╔════╝ ██╔═══██╗██╔══██╗██╔════╝');
+  console.log('  ██████╔╝ ╚████╔╝    ██║   █████╗  ██║      ██║   ██║██║  ██║█████╗  ');
+  console.log('  ██╔══██╗  ╚██╔╝     ██║   ██╔══╝  ██║      ██║   ██║██║  ██║██╔══╝  ');
+  console.log('  ██████╔╝   ██║      ██║   ███████╗╚██████╗ ╚██████╔╝██████╔╝███████╗');
+  console.log('  ╚═════╝    ╚═╝      ╚═╝   ╚══════╝ ╚═════╝  ╚═════╝ ╚═════╝ ╚══════╝');
+  console.log('\x1b[0m');
+  console.log('  \x1b[1m\x1b[34m[SYSTEM CONFIGURATION]\x1b[0m');
+  console.log(`  \x1b[32m[+]\x1b[0m Control URL:   \x1b[4mhttp://localhost:${PORT}\x1b[0m`);
+  console.log(`  \x1b[32m[+]\x1b[0m API Endpoint:  \x1b[4mhttp://localhost:${PORT}/api\x1b[0m`);
+  console.log(`  \x1b[32m[+]\x1b[0m Tactical Hub:  \x1b[1mONLINE\x1b[0m`);
   console.log('');
 });

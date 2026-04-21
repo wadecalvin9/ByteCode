@@ -67,6 +67,22 @@ function initializeDatabase() {
     CREATE INDEX IF NOT EXISTS idx_agents_api_key ON agents(api_key);
   `);
 
+  // Seed default admin if no operators exist
+  const count = db.prepare('SELECT COUNT(*) as count FROM operators').get().count;
+  if (count === 0) {
+    const bcrypt = require('bcryptjs');
+    const { v4: uuidv4 } = require('uuid');
+    const username = 'admin';
+    const password = 'bytecode';
+    const passwordHash = bcrypt.hashSync(password, 10);
+    const id = uuidv4();
+
+    db.prepare('INSERT INTO operators (id, username, password_hash) VALUES (?, ?, ?)')
+      .run(id, username, passwordHash);
+    
+    console.log('[DB] Seeded default operator: admin / bytecode');
+  }
+
   console.log('[DB] Database initialized successfully');
 }
 

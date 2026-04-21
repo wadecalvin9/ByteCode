@@ -1,0 +1,25 @@
+{
+  "name": "bytecode-c2",
+  "version": "1.0.1",
+  "description": "Tactical Infrastructure Monitoring & Command and Control System",
+  "main": "server/src/index.js",
+  "bin": {
+    "bytecode": "bin/bytecode.js"
+  },
+  "scripts": {
+    "start": "node bin/bytecode.js start",
+    "build": "cd dashboard && npm run build",
+    "install-all": "npm install && cd server && npm install && cd ../dashboard && npm install"
+  },
+  "keywords": [
+    "c2",
+    "redteam",
+    "monitoring",
+    "infrastructure"
+  ],
+  "author": "Antigravity",
+  "license": "MIT",
+  "dependencies": {
+    "commander": "^11.1.0"
+  }
+}
