@@ -10,7 +10,8 @@ import {
   ShieldCheck,
   Loader2,
   RefreshCw,
-  Skull
+  Skull,
+  MapPin
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { agentsApi } from '../utils/api';
@@ -67,6 +68,15 @@ const AgentsPage = () => {
     a.id.includes(searchQuery)
   );
 
+  const getGeoFromMetadata = (metadataStr) => {
+    try {
+      const metadata = JSON.parse(metadataStr || '{}');
+      return metadata.geo;
+    } catch {
+      return null;
+    }
+  };
+
   if (loading && agents.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center bg-slate-950">
@@ -81,7 +91,7 @@ const AgentsPage = () => {
   return (
     <div className="flex-1 flex flex-col h-full bg-slate-950 overflow-hidden">
       {/* Header Area */}
-      <div className="px-8 pt-10 pb-6 border-b border-slate-900 bg-slate-950/50">
+      <div className="px-8 pt-10 pb-6 border-b border-slate-900 bg-slate-950/50 shrink-0">
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-4">
             <div className="p-3 bg-primary/10 rounded-2xl border border-primary/20">
@@ -108,7 +118,6 @@ const AgentsPage = () => {
           </div>
         </div>
 
-        {/* Global Search & Filters */}
         <div className="flex items-center gap-4">
           <div className="flex-1 relative group">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600 group-focus-within:text-primary transition-colors" />
@@ -165,6 +174,14 @@ const AgentsPage = () => {
                           <Cpu className="w-3 h-3 text-slate-700" />
                           <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter">{agent.arch} • PID {agent.pid}</span>
                         </div>
+                        {getGeoFromMetadata(agent.metadata) && (
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <MapPin className="w-3 h-3 text-primary/50" />
+                            <span className="text-[9px] font-black text-primary/70 uppercase tracking-widest">
+                              {getGeoFromMetadata(agent.metadata).city}, {getGeoFromMetadata(agent.metadata).country}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </td>
                     <td className="px-6 py-5">

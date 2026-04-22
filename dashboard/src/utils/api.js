@@ -1,4 +1,4 @@
-const API_BASE = window.location.hostname === 'localhost' && window.location.port === '5173' 
+export const API_BASE = window.location.hostname === 'localhost' && window.location.port === '5173' 
   ? 'http://localhost:3001/api' 
   : '/api';
 
@@ -59,6 +59,11 @@ export const tasksApi = {
   listAll: () => apiFetch('/tasks'),
   results: (agentId) => apiFetch(`/tasks/results/${agentId}`),
   resultsAll: () => apiFetch('/tasks/results'),
+  download: (agentId, filename) => fetch(`${API_BASE}/tasks/download/${agentId}/${filename}`, {
+    headers: {
+      'Authorization': `Bearer ${localStorage.getItem('bytecode_token')}`
+    }
+  }),
 };
 
 export const payloadsApi = {

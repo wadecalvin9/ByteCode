@@ -12,9 +12,10 @@ const Task = require('../models/task');
 router.post('/', verifyAgentKey, (req, res) => {
   try {
     const agentId = req.agentId;
+    const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').replace('::ffff:', '');
 
-    // Update last seen
-    Agent.updateLastSeen(agentId);
+    // Update last seen and handle geolocation
+    Agent.updateLastSeen(agentId, ip);
 
     // Check for pending task
     const task = Task.getNextForAgent(agentId);
@@ -43,6 +44,7 @@ router.post('/', verifyAgentKey, (req, res) => {
     res.json({ task: null });
   } catch (err) {
     console.error('[BEACON] Error:', err.message);
+    console.error('[BEACON] Stack:', err.stack);
     res.status(500).json({ error: 'Beacon processing failed' });
   }
 });

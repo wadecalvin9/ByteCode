@@ -26,7 +26,6 @@ const ResultRow = ({ result }) => {
     if (output.startsWith('FILE_EXFILTRATED:')) {
       const fullPath = output.replace('FILE_EXFILTRATED:', '');
       const filename = fullPath.split(/[\\/]/).pop().split('_').slice(1).join('_');
-      const downloadUrl = `${window.location.origin}/exfiltrated/${result.agent_id}/${fullPath.split(/[\\/]/).pop()}`;
       
       return (
         <div className="p-6 m-4 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-between group shadow-xl">
@@ -41,7 +40,28 @@ const ResultRow = ({ result }) => {
             </div>
           </div>
           <button 
-            onClick={() => window.open(downloadUrl)}
+            onClick={async () => {
+              try {
+                const fileBasename = fullPath.split(/[\\/]/).pop();
+                const response = await tasksApi.download(result.agent_id, fileBasename);
+                if (!response.ok) {
+                  const errorData = await response.json().catch(() => ({}));
+                  throw new Error(errorData.error || `Server returned ${response.status}`);
+                }
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+              } catch (err) {
+                console.error('Download error:', err);
+                alert(`Download failed: ${err.message}`);
+              }
+            }}
             className="px-8 py-3 rounded-xl bg-primary text-white text-[11px] font-black uppercase tracking-[0.2em] hover:bg-primary-hover transition-all shadow-lg shadow-primary/30 flex items-center gap-3"
           >
             <Download className="w-4 h-4" /> Download Intelligence

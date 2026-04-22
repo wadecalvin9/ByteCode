@@ -27,6 +27,7 @@ function initializeDatabase() {
       pid INTEGER,
       api_key TEXT UNIQUE NOT NULL,
       internal_ip TEXT,
+      external_ip TEXT,
       last_seen TEXT DEFAULT (datetime('now')),
       first_seen TEXT DEFAULT (datetime('now')),
       status TEXT DEFAULT 'active',
@@ -66,6 +67,13 @@ function initializeDatabase() {
     CREATE INDEX IF NOT EXISTS idx_results_agent ON results(agent_id);
     CREATE INDEX IF NOT EXISTS idx_agents_api_key ON agents(api_key);
   `);
+
+  // Auto-migrate: add columns that may be missing from older databases
+  const agentCols = db.prepare('PRAGMA table_info(agents)').all().map(c => c.name);
+  if (!agentCols.includes('external_ip')) {
+    db.prepare('ALTER TABLE agents ADD COLUMN external_ip TEXT').run();
+    console.log('[DB] Migration: added external_ip column to agents');
+  }
 
   // Seed default admin if no operators exist
   const count = db.prepare('SELECT COUNT(*) as count FROM operators').get().count;
