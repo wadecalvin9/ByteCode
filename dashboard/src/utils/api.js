@@ -43,6 +43,7 @@ export const agentsApi = {
   list: () => apiFetch('/agents'),
   get: (id) => apiFetch(`/agents/${id}`),
   kill: (id) => apiFetch(`/agents/${id}`, { method: 'DELETE' }),
+  purge: (id) => apiFetch(`/agents/purge/${id}`, { method: 'POST' }),
   updateMetadata: (id, metadata) => apiFetch(`/agents/${id}/metadata`, {
     method: 'PATCH',
     body: JSON.stringify({ metadata }),

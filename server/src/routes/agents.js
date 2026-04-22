@@ -4,6 +4,13 @@ const { verifyToken } = require('../middleware/auth');
 const Agent = require('../models/agent');
 const Result = require('../models/result');
 
+console.log('[AGENTS] Router initialized');
+
+router.use((req, res, next) => {
+  console.log(`[AGENTS] Request received: ${req.method} ${req.url}`);
+  next();
+});
+
 /**
  * GET /api/agents
  * List all agents with status info
@@ -69,6 +76,23 @@ router.patch('/:id/metadata', verifyToken, (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: 'Failed to update metadata' });
+  }
+});
+
+/**
+ * POST /api/agents/purge/:id
+ * Permanently remove an agent from database
+ * Auth: JWT (operator)
+ */
+router.post('/purge/:id', verifyToken, (req, res) => {
+  console.log(`[AGENTS] Attempting purge for ID: ${req.params.id}`);
+  try {
+    Agent.remove(req.params.id);
+    console.log(`[AGENTS] Agent ${req.params.id.slice(0, 8)}... PURGED`);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[AGENTS] Purge Error:', err.message);
+    res.status(500).json({ error: 'Failed to purge agent' });
   }
 });
 

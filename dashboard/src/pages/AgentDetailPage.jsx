@@ -24,7 +24,8 @@ import {
   Monitor,
   ShieldCheck,
   ShieldAlert,
-  Bomb
+  Bomb,
+  Download
 } from 'lucide-react';
 import { agentsApi, tasksApi } from '../utils/api';
 import { format, formatDistanceToNow } from 'date-fns';
@@ -58,6 +59,7 @@ const AgentDetailPage = () => {
       setToasts(prev => prev.filter(t => t.id !== id));
     }, 4000);
   }, []);
+
 
   const fetchDetails = useCallback(async () => {
     try {
@@ -243,6 +245,7 @@ const AgentDetailPage = () => {
   };
 
   const renderOutput = (res) => {
+    const output = res.output;
     if (res.output && res.output.startsWith('SCREENSHOT:')) {
       const dataUri = res.output.replace('SCREENSHOT:', '');
       return (
@@ -261,7 +264,8 @@ const AgentDetailPage = () => {
     if (res.output && res.output.startsWith('FILE_EXFILTRATED:')) {
       const fullPath = res.output.replace('FILE_EXFILTRATED:', '');
       const filename = fullPath.split(/[\\/]/).pop().split('_').slice(1).join('_');
-      const downloadUrl = `${window.location.origin}/exfiltrated/${id}/${fullPath.split(/[\\/]/).pop()}`;
+      const fileBasename = fullPath.split(/[\\/]/).pop();
+      const downloadUrl = `${window.location.origin}/exfiltrated/${id}/${fileBasename}`;
       
       return (
         <div className="p-4 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-between group">
@@ -280,6 +284,37 @@ const AgentDetailPage = () => {
           >
             Download to Local
           </button>
+        </div>
+      );
+    }
+
+    // Binary Detection for 'cat' commands
+    if (res.task_type === 'cat' && output && (output.startsWith('%PDF-') || output.includes(''))) {
+      const payload = typeof res.task_payload === 'string' ? JSON.parse(res.task_payload) : (res.task_payload || {});
+      const fileName = payload.path ? payload.path.split(/[\\/]/).pop() : 'Binary File';
+      
+      return (
+        <div className="p-6 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex flex-col gap-4">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-amber-500/20 rounded-xl text-amber-500">
+              <AlertCircle className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="text-[10px] font-black text-amber-500 uppercase tracking-[0.2em] mb-1">Binary Stream Detected</div>
+              <div className="text-sm font-bold text-white">Console cannot render raw binary data for: {fileName}</div>
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <button 
+              onClick={() => handleExfiltrate({ name: fileName })}
+              className="px-6 py-2.5 rounded-xl bg-amber-500 text-black text-[10px] font-black uppercase tracking-[0.2em] hover:bg-amber-400 transition-all shadow-lg shadow-amber-500/20 flex items-center gap-2"
+            >
+              <Download className="w-3.5 h-3.5" /> Full Exfiltration
+            </button>
+            <div className="flex-1 p-3 bg-black/40 rounded-xl font-mono text-[10px] text-slate-500 border border-slate-800">
+              PDF/Binary data detected. Use exfiltration to retrieve the full asset for local analysis.
+            </div>
+          </div>
         </div>
       );
     }
@@ -1063,7 +1098,7 @@ const AgentDetailPage = () => {
                                       className="p-1.5 rounded-lg hover:bg-emerald-500/10 text-slate-500 hover:text-emerald-400 transition-all"
                                       title="Exfiltrate"
                                     >
-                                      <ArrowDown className="w-3.5 h-3.5" />
+                                      <Download className="w-3.5 h-3.5" />
                                     </button>
                                   </>
                                 )}

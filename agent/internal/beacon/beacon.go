@@ -59,7 +59,7 @@ func Loop(client *comms.Client, cfg *config.Config) error {
 		}
 
 		// Execute the task
-		result := executor.Execute(task)
+		result := executor.Execute(task, client.APIKey)
 		log.Printf("[TASK] Completed: status=%s\n", result.Status)
 
 		// Send result back

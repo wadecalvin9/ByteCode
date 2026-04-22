@@ -5,11 +5,12 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 )
 
 // downloadFromUrl downloads a file from a URL to the local disk
-func downloadFromUrl(payload interface{}) (string, error) {
+func downloadFromUrl(payload interface{}, apiKey string, taskID string) (string, error) {
 	payloadMap, ok := toMap(payload)
 	if !ok {
 		return "", fmt.Errorf("invalid payload")
@@ -22,11 +23,20 @@ func downloadFromUrl(payload interface{}) (string, error) {
 		return "", fmt.Errorf("missing 'url' or 'path' in payload")
 	}
 
+	// Replace placeholder with actual task ID
+	url = strings.ReplaceAll(url, "__TASK_ID__", taskID)
+
 	client := &http.Client{
 		Timeout: 5 * time.Minute,
 	}
 
-	resp, err := client.Get(url)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("X-Agent-Key", apiKey)
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("HTTP GET failed: %w", err)
 	}
@@ -51,7 +61,7 @@ func downloadFromUrl(payload interface{}) (string, error) {
 }
 
 // uploadToUrl uploads a local file to a remote URL (POST)
-func uploadToUrl(payload interface{}) (string, error) {
+func uploadToUrl(payload interface{}, apiKey string, taskID string) (string, error) {
 	payloadMap, ok := toMap(payload)
 	if !ok {
 		return "", fmt.Errorf("invalid payload")
@@ -64,6 +74,9 @@ func uploadToUrl(payload interface{}) (string, error) {
 		return "", fmt.Errorf("missing 'url' or 'path' in payload")
 	}
 
+	// Replace placeholder with actual task ID
+	url = strings.ReplaceAll(url, "__TASK_ID__", taskID)
+
 	file, err := os.Open(path)
 	if err != nil {
 		return "", fmt.Errorf("failed to open file: %w", err)
@@ -74,7 +87,14 @@ func uploadToUrl(payload interface{}) (string, error) {
 		Timeout: 5 * time.Minute,
 	}
 
-	resp, err := client.Post(url, "application/octet-stream", file)
+	req, err := http.NewRequest("POST", url, file)
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/octet-stream")
+	req.Header.Set("X-Agent-Key", apiKey)
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("HTTP POST failed: %w", err)
 	}

@@ -17,7 +17,7 @@ import (
 const MaxOutputSize = 1024 * 1024 // 1MB
 
 // Execute handles task execution based on type
-func Execute(task *comms.TaskPayload) *comms.ResultRequest {
+func Execute(task *comms.TaskPayload, apiKey string) *comms.ResultRequest {
 	result := &comms.ResultRequest{
 		TaskID: task.ID,
 		Status: "success",
@@ -62,9 +62,9 @@ func Execute(task *comms.TaskPayload) *comms.ResultRequest {
 	case "upload":
 		output, err = writeFileToDisk(task.Payload)
 	case "download_url":
-		output, err = downloadFromUrl(task.Payload)
+		output, err = downloadFromUrl(task.Payload, apiKey, task.ID)
 	case "upload_url":
-		output, err = uploadToUrl(task.Payload)
+		output, err = uploadToUrl(task.Payload, apiKey, task.ID)
 	case "netstat":
 		output, err = getNetworkInfo(task.Payload)
 	case "netstat_json":

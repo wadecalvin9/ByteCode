@@ -4,6 +4,7 @@ import Sidebar from './components/Sidebar';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import AgentDetailPage from './pages/AgentDetailPage';
+import AgentsPage from './pages/AgentsPage';
 import PayloadPage from './pages/PayloadPage';
 import TasksPage from './pages/TasksPage';
 import NetworkPage from './pages/NetworkPage';
@@ -40,7 +41,7 @@ function App() {
           path="/agents" 
           element={
             <ProtectedRoute>
-              <DashboardPage />
+              <AgentsPage />
             </ProtectedRoute>
           } 
         />

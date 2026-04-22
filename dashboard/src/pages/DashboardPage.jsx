@@ -19,7 +19,8 @@ import {
   ArrowDownRight,
   MoreHorizontal,
   Send,
-  Server
+  Server,
+  Skull
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { agentsApi, tasksApi } from '../utils/api';
@@ -241,6 +242,16 @@ const DashboardPage = () => {
     return () => { isMounted = false; clearInterval(interval); };
   }, []);
 
+  const handlePurge = async (id, hostname) => {
+    if (!window.confirm(`Permanently remove ${hostname} from the database?`)) return;
+    try {
+      await agentsApi.purge(id);
+      setAgents(prev => prev.filter(a => a.id !== id));
+    } catch (err) {
+      alert('Failed to purge: ' + err.message);
+    }
+  };
+
   const filteredAgents = agents.filter(a => 
     a.hostname.toLowerCase().includes(searchQuery.toLowerCase()) ||
     a.ip_address?.includes(searchQuery) ||
@@ -364,7 +375,16 @@ const DashboardPage = () => {
                       <td className="time-cell">
                         {formatDistanceToNow(new Date(agent.last_seen), { addSuffix: true })}
                       </td>
-                      <td>
+                      <td className="flex items-center justify-end gap-2 pr-4 h-[60px]">
+                        {agent.connection_status === 'offline' && (
+                          <button 
+                            onClick={() => handlePurge(agent.id, agent.hostname)}
+                            className="p-1.5 rounded-lg text-slate-600 hover:text-red-500 hover:bg-red-500/10 transition-all"
+                            title="Purge Zombie Node"
+                          >
+                            <Skull className="w-4 h-4" />
+                          </button>
+                        )}
                         <Link to={`/agents/${agent.id}`} className="row-action-btn">
                           <ChevronRight className="w-4 h-4" />
                         </Link>

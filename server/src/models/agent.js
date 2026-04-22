@@ -87,6 +87,21 @@ class Agent {
   }
 
   /**
+   * Permanently remove an agent and all associated data
+   */
+  static remove(agentId) {
+    db.transaction(() => {
+      // Order is critical due to foreign key constraints:
+      // 1. Delete results (depends on tasks and agents)
+      db.prepare('DELETE FROM results WHERE agent_id = ?').run(agentId);
+      // 2. Delete tasks (depends on agents)
+      db.prepare('DELETE FROM tasks WHERE agent_id = ?').run(agentId);
+      // 3. Delete agent
+      db.prepare('DELETE FROM agents WHERE id = ?').run(agentId);
+    })();
+  }
+
+  /**
    * Get agent count stats
    */
   static getStats() {
