@@ -43,6 +43,10 @@ export const agentsApi = {
   list: () => apiFetch('/agents'),
   get: (id) => apiFetch(`/agents/${id}`),
   kill: (id) => apiFetch(`/agents/${id}`, { method: 'DELETE' }),
+  updateMetadata: (id, metadata) => apiFetch(`/agents/${id}/metadata`, {
+    method: 'PATCH',
+    body: JSON.stringify({ metadata }),
+  }),
 };
 
 export const tasksApi = {
@@ -51,12 +55,14 @@ export const tasksApi = {
     body: JSON.stringify({ agent_id, type, payload }),
   }),
   list: (agentId) => apiFetch(`/tasks/${agentId}`),
+  listAll: () => apiFetch('/tasks'),
   results: (agentId) => apiFetch(`/tasks/results/${agentId}`),
+  resultsAll: () => apiFetch('/tasks/results'),
 };
 
 export const payloadsApi = {
-  generate: (serverUrl, showGui = false) => apiFetch('/payloads/generate', {
+  generate: (serverUrl, showGui = false, interval = 10, jitter = 15) => apiFetch('/payloads/generate', {
     method: 'POST',
-    body: JSON.stringify({ serverUrl, showGui }),
+    body: JSON.stringify({ serverUrl, showGui, interval, jitter }),
   }),
 };

@@ -50,16 +50,16 @@ router.post('/', verifyToken, (req, res) => {
 });
 
 /**
- * GET /api/tasks/:agentId
- * Get all tasks for a specific agent
+ * GET /api/tasks/results
+ * Get recent results across all agents
  * Auth: JWT (operator)
  */
-router.get('/:agentId', verifyToken, (req, res) => {
+router.get('/results', verifyToken, (req, res) => {
   try {
-    const tasks = Task.getByAgent(req.params.agentId);
-    res.json({ tasks });
+    const results = Result.getRecent(100);
+    res.json({ results });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch tasks' });
+    res.status(500).json({ error: 'Failed to fetch results' });
   }
 });
 
@@ -80,7 +80,7 @@ router.get('/', verifyToken, (req, res) => {
 });
 
 /**
- * GET /api/results/:agentId
+ * GET /api/tasks/results/:agentId
  * Get results for a specific agent
  * Auth: JWT (operator)
  */
@@ -90,6 +90,20 @@ router.get('/results/:agentId', verifyToken, (req, res) => {
     res.json({ results });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch results' });
+  }
+});
+
+/**
+ * GET /api/tasks/:agentId
+ * Get all tasks for a specific agent
+ * Auth: JWT (operator)
+ */
+router.get('/:agentId', verifyToken, (req, res) => {
+  try {
+    const tasks = Task.getByAgent(req.params.agentId);
+    res.json({ tasks });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch tasks' });
   }
 });
 

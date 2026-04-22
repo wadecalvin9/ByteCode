@@ -50,7 +50,7 @@ const PayloadPage = () => {
     try {
       // Simulate backend delay for log effect
       await new Promise(r => setTimeout(r, 4500));
-      const data = await payloadsApi.generate(serverUrl, showGui);
+      const data = await payloadsApi.generate(serverUrl, showGui, interval, jitter);
       setResult(data);
     } catch (err) {
       setError(err.message);

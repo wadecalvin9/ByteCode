@@ -5,6 +5,9 @@ import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import AgentDetailPage from './pages/AgentDetailPage';
 import PayloadPage from './pages/PayloadPage';
+import TasksPage from './pages/TasksPage';
+import NetworkPage from './pages/NetworkPage';
+import DataPage from './pages/DataPage';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -54,6 +57,30 @@ function App() {
           element={
             <ProtectedRoute>
               <PayloadPage />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/tasks" 
+          element={
+            <ProtectedRoute>
+              <TasksPage />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/network" 
+          element={
+            <ProtectedRoute>
+              <NetworkPage />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/data" 
+          element={
+            <ProtectedRoute>
+              <DataPage />
             </ProtectedRoute>
           } 
         />

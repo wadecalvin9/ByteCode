@@ -41,8 +41,8 @@ const Sidebar = ({ children }) => {
     { icon: Users, label: 'Node Assets', path: '/agents' },
     { icon: Cpu, label: 'Payload Foundry', path: '/payloads' },
     { icon: Terminal, label: 'Task Auditor', path: '/tasks' },
-    { icon: Globe, label: 'Network Graph', path: '/network', disabled: true },
-    { icon: Database, label: 'Exfiltrated Data', path: '/data', disabled: true },
+    { icon: Globe, label: 'Network Graph', path: '/network' },
+    { icon: Database, label: 'Exfiltrated Data', path: '/data' },
   ];
 
   const bottomNav = [

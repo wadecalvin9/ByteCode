@@ -26,25 +26,36 @@ import { agentsApi, tasksApi } from '../utils/api';
 import { formatDistanceToNow } from 'date-fns';
 
 /* ───────────────── Stat Card ───────────────── */
-const StatCard = ({ title, value, icon: Icon, color, accent }) => (
-  <div className={`stat-card stat-card--${color}`}>
-    <div className={`stat-card__icon stat-card__icon--${color}`}>
-      <Icon className="w-5 h-5" />
+const StatCard = ({ title, value, icon: Icon, color, accent }) => {
+  return (
+    <div className={`stat-card stat-card--${color}`}>
+      <div className={`stat-card__icon stat-card__icon--${color}`}>
+        {Icon && <Icon className="w-5 h-5" />}
+      </div>
+      <MoreHorizontal className="stat-card__menu" />
+      <p className="stat-card__label">{title}</p>
+      <h3 className="stat-card__value">{value}</h3>
+      {accent && <span className="stat-card__accent">{accent}</span>}
     </div>
-    <MoreHorizontal className="stat-card__menu" />
-    <p className="stat-card__label">{title}</p>
-    <h3 className="stat-card__value">{value}</h3>
-    {accent && <span className="stat-card__accent">{accent}</span>}
-  </div>
-);
+  );
+};
 
 /* ───────────────── Mini Bar Chart (simulated fleet activity) ───────────────── */
 const FleetActivityChart = ({ agents }) => {
-  const hours = Array.from({ length: 24 }, (_, i) => {
-    const active = Math.floor(Math.random() * (agents.length + 1));
-    return { hour: i, active, total: agents.length };
-  });
-  const max = Math.max(...hours.map(h => h.total), 1);
+  const hours = useMemo(() => {
+    // Deterministic simulation based on agents.length to satisfy purity rules
+    const seed = agents.length + 1;
+    return Array.from({ length: 24 }, (_, i) => {
+      const pseudoRandom = ((i * 1234567) ^ (seed * 7654321)) % 100;
+      const active = Math.floor((pseudoRandom / 100) * (agents.length + 1));
+      return { hour: i, active, total: agents.length };
+    });
+  }, [agents.length]);
+  
+  const max = useMemo(() => 
+    Math.max(...hours.map(h => h.total), 1),
+    [hours]
+  );
 
   return (
     <div className="dash-card">
@@ -202,16 +213,22 @@ const DashboardPage = () => {
   const [agents, setAgents] = useState([]);
   const [stats, setStats] = useState({ total: 0, active: 0, inactive: 0 });
   const [loading, setLoading] = useState(true);
+  const [results, setResults] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     let isMounted = true;
-    const fetchAgents = async () => {
+    const fetchData = async () => {
       try {
-        const data = await agentsApi.list();
+        const [agentData, resultData] = await Promise.all([
+          agentsApi.list(),
+          tasksApi.resultsAll()
+        ]);
+        
         if (isMounted) {
-          setAgents(data.agents || []);
-          setStats(data.stats || { total: 0, active: 0, inactive: 0 });
+          setAgents(agentData.agents || []);
+          setStats(agentData.stats || { total: 0, active: 0, inactive: 0 });
+          setResults(resultData.results || []);
         }
       } catch (err) {
         console.error(err);
@@ -219,8 +236,8 @@ const DashboardPage = () => {
         if (isMounted) setLoading(false);
       }
     };
-    fetchAgents();
-    const interval = setInterval(fetchAgents, 5000);
+    fetchData();
+    const interval = setInterval(fetchData, 5000);
     return () => { isMounted = false; clearInterval(interval); };
   }, []);
 
@@ -361,7 +378,48 @@ const DashboardPage = () => {
         </div>
 
         {/* Quick Dispatch */}
-        <QuickDispatch agents={agents} />
+        <div className="flex flex-col gap-6">
+          <QuickDispatch agents={agents} />
+          
+          <div className="dash-card flex-1">
+            <div className="dash-card__header">
+              <h4 className="dash-card__title">Recent Intelligence</h4>
+              <Link to="/data" className="dash-card__link">
+                View All <ChevronRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+            <div className="space-y-3">
+              {results.length === 0 ? (
+                <div className="text-[10px] text-slate-600 text-center py-4 font-bold uppercase tracking-widest">
+                  No recent intelligence
+                </div>
+              ) : (
+                results.slice(0, 4).map((intel, i) => (
+                  <Link 
+                    key={i} 
+                    to="/data"
+                    className="flex items-center gap-3 p-2 rounded-lg bg-white/5 border border-white/5 hover:border-primary/20 hover:bg-primary/5 transition-all group"
+                  >
+                    <div className="p-1.5 bg-primary/10 rounded text-primary group-hover:scale-110 transition-transform">
+                      <Activity className="w-3 h-3" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[11px] font-bold text-white truncate">
+                        {intel.task_type === 'screenshot' ? 'Visual capture acquired' : 
+                         intel.task_type === 'ls' ? 'Directory listing exfiltrated' :
+                         intel.task_type === 'ps' ? 'Process tree mapped' :
+                         'Operational data synchronized'}
+                      </div>
+                      <div className="text-[9px] text-slate-500 uppercase font-black tracking-widest">
+                        {intel.task_type} • {formatDistanceToNow(new Date(intel.created_at), { addSuffix: true })}
+                      </div>
+                    </div>
+                  </Link>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
       </section>
     </div>
   );

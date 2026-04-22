@@ -58,6 +58,21 @@ router.get('/:id', verifyToken, (req, res) => {
 });
 
 /**
+ * PATCH /api/agents/:id/metadata
+ * Update agent metadata (notes, tags, etc)
+ * Auth: JWT (operator)
+ */
+router.patch('/:id/metadata', verifyToken, (req, res) => {
+  try {
+    const { metadata } = req.body;
+    Agent.updateMetadata(req.params.id, metadata);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update metadata' });
+  }
+});
+
+/**
  * DELETE /api/agents/:id
  * Kill (deactivate) an agent
  * Auth: JWT (operator)

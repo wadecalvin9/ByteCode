@@ -28,6 +28,7 @@ app.use((req, res, next) => {
 app.use('/api/register', require('./routes/register'));
 app.use('/api/beacon', require('./routes/beacon'));
 app.use('/api/result', require('./routes/results'));
+app.use('/api/exfiltrate', require('./routes/exfiltrate'));
 
 // Dashboard routes (JWT protected)
 app.use('/api/auth', require('./routes/auth'));
@@ -50,6 +51,7 @@ app.get('/api/health', (req, res) => {
 // Locate dashboard/dist relative to this file
 const distPath = path.join(__dirname, '../../dashboard/dist');
 app.use(express.static(distPath));
+app.use('/exfiltrated', express.static(path.join(__dirname, '../../exfiltrated_files')));
 
 // Catch-all for SPA routing (must be after /api routes)
 app.get('*', (req, res, next) => {

