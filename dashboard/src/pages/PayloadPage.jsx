@@ -29,7 +29,7 @@ const PayloadPage = () => {
       "[*] Compiling with GOOS=" + platform + " GOARCH=amd64...",
       "[*] Stripping symbols and optimizing binary...",
       "[*] Generating unique agent signature...",
-      "[+] Compilation successful. Artifact ready for deployment."
+      "[+] Build successful. Artifact ready for deployment."
     ];
     
     setCompilationLog([]);
@@ -68,8 +68,8 @@ const PayloadPage = () => {
   return (
     <div className="flex-1 h-full overflow-y-auto p-8 scrollbar-thin space-y-6">
       <div className="shrink-0">
-        <h1 className="text-3xl font-black text-white tracking-tight uppercase">Payload Foundry</h1>
-        <p className="text-slate-500 text-xs font-bold uppercase tracking-[0.2em] mt-1">Forge custom beacon artifacts for targeted deployment</p>
+        <h1 className="text-3xl font-black text-white tracking-tight uppercase">Payload Builder</h1>
+        <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mt-1">Configure and generate custom beacon artifacts</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -80,7 +80,7 @@ const PayloadPage = () => {
               <div className="p-2 bg-primary/10 rounded-lg border border-primary/20 text-primary">
                 <Cpu className="w-4 h-4" />
               </div>
-              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white">Mission Configuration</span>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-white">Build Configuration</span>
             </div>
 
             <form onSubmit={handleGenerate} className="space-y-5">
@@ -146,20 +146,20 @@ const PayloadPage = () => {
                 </div>
               </div>
 
-              <button
-                type="submit"
-                disabled={isGenerating}
-                className="w-full py-3 rounded-xl bg-primary text-white text-xs font-black uppercase tracking-[0.2em] hover:bg-primary-hover transition-all flex items-center justify-center gap-3 disabled:opacity-50"
-              >
-                {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Cpu className="w-4 h-4" />}
-                Forge Artifact
-              </button>
+                <button
+                  type="submit"
+                  disabled={isGenerating}
+                  className="w-full py-3 rounded-xl bg-primary text-white text-xs font-black uppercase tracking-wider hover:bg-primary-hover transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+                >
+                  {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Cpu className="w-4 h-4" />}
+                  Generate Payload
+                </button>
             </form>
           </div>
 
           <div className="card p-6 border-slate-800/50 bg-slate-900/20">
             <div className="flex items-center gap-3 mb-4">
-              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Configuration Blueprint</span>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Configuration JSON</span>
             </div>
             <pre className="text-[10px] font-mono text-primary/70 bg-black/40 p-4 rounded-lg border border-primary/10 overflow-x-auto">
 {JSON.stringify({
@@ -179,7 +179,7 @@ const PayloadPage = () => {
             <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/40">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white">Foundry Console</span>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-white">Build Console</span>
               </div>
               <span className="text-[9px] font-mono text-slate-600">STDOUT-STREAM-01</span>
             </div>
@@ -195,7 +195,7 @@ const PayloadPage = () => {
               {!isGenerating && compilationLog.length === 0 && (
                 <div className="h-full flex flex-col items-center justify-center opacity-20 select-none grayscale">
                   <TerminalIcon className="w-12 h-12 mb-4" />
-                  <p className="text-[10px] uppercase tracking-[0.4em] font-bold">Waiting for forge command</p>
+                  <p className="text-[10px] uppercase tracking-widest font-bold">Waiting for build command</p>
                 </div>
               )}
               {isGenerating && <div className="w-1 h-4 bg-primary animate-pulse inline-block ml-1 align-middle" />}
@@ -210,7 +210,7 @@ const PayloadPage = () => {
                     <CheckCircle className="w-6 h-6" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-black text-white uppercase tracking-tight">Artifact Forged</h3>
+                    <h3 className="text-lg font-black text-white uppercase tracking-tight">Build Complete</h3>
                     <p className="text-xs font-mono text-emerald-500/70">{result.filename}</p>
                   </div>
                 </div>
@@ -219,7 +219,7 @@ const PayloadPage = () => {
                   className="px-8 py-3 rounded-xl bg-emerald-500 text-white text-[10px] font-black uppercase tracking-[0.2em] hover:bg-emerald-600 transition-all flex items-center gap-3 shadow-lg shadow-emerald-500/20"
                 >
                   <Download className="w-4 h-4" />
-                  Exfiltrate Binary
+                  Download Payload
                 </button>
               </div>
             </div>
@@ -232,7 +232,7 @@ const PayloadPage = () => {
                   <AlertCircle className="w-6 h-6" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-black text-white uppercase tracking-tight">Forge Failure</h3>
+                  <h3 className="text-lg font-black text-white uppercase tracking-tight">Build Failed</h3>
                   <p className="text-xs font-bold text-red-500/70 uppercase tracking-wider">{error}</p>
                 </div>
               </div>

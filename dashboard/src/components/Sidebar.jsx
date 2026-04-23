@@ -38,11 +38,11 @@ const Sidebar = ({ children }) => {
 
   const topNav = [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
-    { icon: Users, label: 'Node Assets', path: '/agents' },
-    { icon: Cpu, label: 'Payload Foundry', path: '/payloads' },
-    { icon: Terminal, label: 'Task Auditor', path: '/tasks' },
-    { icon: Globe, label: 'Network Graph', path: '/network' },
-    { icon: Database, label: 'Exfiltrated Data', path: '/data' },
+    { icon: Users, label: 'Endpoints', path: '/agents' },
+    { icon: Cpu, label: 'Payload Builder', path: '/payloads' },
+    { icon: Terminal, label: 'Task Manager', path: '/tasks' },
+    { icon: Globe, label: 'Network Topology', path: '/network' },
+    { icon: Database, label: 'Data Explorer', path: '/data' },
   ];
 
   const bottomNav = [

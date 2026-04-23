@@ -311,7 +311,7 @@ const AgentDetailPage = () => {
               <Download className="w-6 h-6" />
             </div>
             <div>
-              <div className="text-[10px] font-black text-primary uppercase tracking-[0.2em] mb-1">Target Intelligence Acquired</div>
+              <div className="text-[10px] font-black text-primary uppercase tracking-[0.2em] mb-1">File Captured</div>
               <div className="text-sm font-bold text-white">{filename}</div>
             </div>
           </div>
@@ -384,7 +384,7 @@ const AgentDetailPage = () => {
           </div>
 
           <div className="space-y-2">
-             <div className="text-[9px] font-black text-slate-500 uppercase tracking-widest pl-1">Hex Intelligence Preview (First 256 Bytes)</div>
+             <div className="text-[9px] font-black text-slate-500 uppercase tracking-widest pl-1">Data Preview (First 256 Bytes)</div>
              <pre className="p-4 bg-black/60 rounded-xl border border-slate-800/50 font-mono text-[10px] text-emerald-500/80 leading-relaxed overflow-x-auto shadow-inner">
                {generateHexPreview(output)}
              </pre>
@@ -415,7 +415,7 @@ const AgentDetailPage = () => {
           return (
             <div className="bg-slate-900/40 rounded-xl border border-slate-800/50 overflow-hidden">
               <div className="px-4 py-2 border-b border-slate-800/50 bg-slate-900/60 flex items-center justify-between">
-                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Structured Intelligence Data</span>
+                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Parsed Data Output</span>
                 <button 
                   onClick={() => {
                     const blob = new Blob([res.output], { type: 'application/json' });
@@ -536,20 +536,20 @@ const AgentDetailPage = () => {
         {loading ? (
           <div className="flex flex-col items-center gap-4">
             <Loader2 className="w-8 h-8 text-primary animate-spin" />
-            <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">Synchronizing Intelligence...</p>
+            <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Establishing secure connection...</p>
           </div>
         ) : (
           <div className="flex flex-col items-center gap-6 p-12 rounded-3xl bg-red-500/5 border border-red-500/10">
             <AlertCircle className="w-12 h-12 text-red-500/50" />
             <div className="text-center">
-              <h3 className="text-white font-bold mb-2">Intelligence Retrieval Failed</h3>
-              <p className="text-xs text-slate-500 max-w-xs">Unable to establish secure link with node. The asset may be offline or the session has expired.</p>
+              <h3 className="text-white font-bold mb-2">Connection Failed</h3>
+              <p className="text-xs text-slate-500 max-w-xs">Unable to establish a link with the endpoint. The device may be offline or unreachable.</p>
             </div>
             <button 
               onClick={() => navigate('/agents')}
               className="px-6 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition-all"
             >
-              Return to Command Center
+              Return to Dashboard
             </button>
           </div>
         )}
@@ -599,52 +599,43 @@ const AgentDetailPage = () => {
 
   return (
     <div className="flex-1 h-full overflow-hidden flex flex-col bg-[#05070a]">
-      {/* Top Intelligence Strip */}
-      <div className="shrink-0 h-16 border-b border-slate-800/50 bg-slate-900/20 backdrop-blur-md flex items-center justify-between px-8 z-30">
+      {/* Top Header Strip */}
+      <div className="shrink-0 h-16 border-b border-border bg-surface/50 backdrop-blur-md flex items-center justify-between px-8 z-30">
         <div className="flex items-center gap-6">
           <button 
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            className={`p-2 rounded-xl transition-all ${sidebarCollapsed ? 'bg-primary/20 text-primary' : 'text-slate-500 hover:text-white'}`}
-            title="Toggle Intel Panel"
+            className={`p-2 rounded-xl transition-all ${sidebarCollapsed ? 'bg-primary/10 text-primary' : 'text-slate-500 hover:text-white'}`}
+            title="Toggle Info Panel"
           >
             <ActivityIcon className="w-5 h-5" />
           </button>
           
           <div className="h-8 w-px bg-slate-800/50" />
 
+        <div className="flex items-center gap-4">
           <button 
             onClick={() => navigate(-1)}
-            className="p-2 rounded-xl hover:bg-white/5 text-slate-500 hover:text-white transition-all group"
+            className="p-2 rounded-lg hover:bg-white/5 text-slate-500 hover:text-white transition-all group"
           >
             <ChevronLeft className="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" />
           </button>
           
-          <div className="h-8 w-px bg-slate-800/50" />
+          <div className="h-8 w-px bg-border" />
 
           <div>
-            <h1 className="text-sm font-black text-white tracking-wider font-mono uppercase">NODE::{agent.hostname}</h1>
-            <p className="text-[10px] font-bold text-slate-500 font-mono mt-0.5 uppercase tracking-tighter opacity-50 truncate max-w-[200px]">{agent.id}</p>
+            <div className="flex items-center gap-2">
+              <h1 className="text-sm font-bold text-white tracking-tight">{agent.hostname}</h1>
+              <div className={`w-2 h-2 rounded-full ${agent.connection_status === 'online' ? 'bg-success shadow-[0_0_8px_var(--color-success)]' : 'bg-slate-700'}`} />
+            </div>
+            <p className="text-[11px] font-mono text-slate-500 leading-none mt-1">{agent.id}</p>
           </div>
+        </div>
         </div>
 
         <div className="flex items-center gap-12">
-          <div className="hidden xl:flex flex-col items-end border-r border-slate-800 pr-12">
-            <span className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-1">Status Intelligence</span>
-            <div className="flex items-center gap-3">
-              <div className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest ${
-                agent.connection_status === 'online' ? 'bg-success/10 text-success' : 'bg-slate-800 text-slate-500'
-              }`}>
-                {agent.connection_status}
-              </div>
-              {agent.is_online_ws && (
-                <div className="px-2 py-0.5 rounded bg-primary/10 text-primary text-[10px] font-black uppercase tracking-widest flex items-center gap-1 animate-pulse">
-                  <Zap className="w-2.5 h-2.5" />
-                  Real-time
-                </div>
-              )}
-              <span className="text-[11px] font-black text-white tracking-[0.2em] uppercase leading-none">NODE :: {agent.hostname}</span>
-              <span className="text-[9px] font-mono text-slate-500 leading-none">{agent.id}</span>
-            </div>
+          <div className="hidden xl:flex flex-col items-end">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Last Contact</span>
+            <span className="text-[11px] font-medium text-slate-300">{agent.last_seen ? formatDistanceToNow(new Date(agent.last_seen), { addSuffix: true }) : 'Never'}</span>
           </div>
         </div>
 
@@ -661,9 +652,9 @@ const AgentDetailPage = () => {
 
           <button 
             onClick={handleKillAgent}
-            className="px-4 py-1.5 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all border border-red-500/20 font-black text-[9px] uppercase tracking-[0.2em] flex items-center gap-2 group"
+            className="px-4 py-2 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all border border-red-500/20 font-bold text-[10px] uppercase tracking-wider flex items-center gap-2 group"
           >
-            KILL NODE <Bomb className="w-3 h-3 group-hover:animate-bounce" />
+            TERMINATE NODE <Trash2 className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
@@ -678,7 +669,7 @@ const AgentDetailPage = () => {
               {/* System Specs */}
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Asset Intelligence</span>
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Endpoint Specifications</span>
                   <ShieldCheck className="w-3.5 h-3.5 text-primary/50" />
                 </div>
                 
@@ -689,34 +680,24 @@ const AgentDetailPage = () => {
                   { label: 'Process ID', value: agent.pid, icon: ActivityIcon },
                   { 
                     label: 'Integrity', 
-                    value: (
-                      <div className="flex items-center gap-2">
-                        <div className="flex items-center gap-0.5">
-                          <div className="h-1.5 w-0.5 bg-emerald-500 rounded-full" />
-                          <div className="h-2.5 w-0.5 bg-emerald-500 rounded-full" />
-                          <div className="h-3.5 w-0.5 bg-emerald-500 rounded-full" />
-                          <div className="h-4.5 w-0.5 bg-emerald-500/30 rounded-full" />
-                        </div>
-                        <span className="text-emerald-400 font-bold tracking-tight">Level 4 (System)</span>
-                      </div>
-                    ), 
+                    value: <span className="text-emerald-500 font-bold tracking-tight">System/Root</span>,
                     icon: ShieldCheck 
                   },
                 ].map((item, i) => (
-                    <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-slate-900/40 border border-slate-800/50 group hover:border-primary/20 transition-all">
+                    <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-surface/30 border border-border group hover:border-primary/30 transition-all">
                       <div className="flex items-center gap-3">
-                        <item.icon className="w-3.5 h-3.5 text-slate-600 group-hover:text-primary transition-colors" />
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{item.label}</span>
+                        <item.icon className="w-4 h-4 text-slate-500 group-hover:text-primary transition-colors" />
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{item.label}</span>
                       </div>
-                      <span className="text-[11px] font-mono text-white/80">{item.value}</span>
+                      <span className="text-[11px] font-mono text-slate-300">{item.value}</span>
                     </div>
                   ))}
                 </div>
               </div>
 
-              {/* Tactical Actions */}
+              {/* Operational Control */}
               <div className="space-y-4 pt-4 border-t border-slate-800/50">
-                <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Quick Dispatch</span>
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Command Shortcuts</span>
                 <div className="grid grid-cols-2 gap-2">
                   {[
                     { label: 'Screenshot', icon: Monitor, type: 'screenshot' },
@@ -730,7 +711,7 @@ const AgentDetailPage = () => {
                       className="flex flex-col items-center justify-center gap-3 p-4 rounded-xl bg-slate-900/40 border border-slate-800/50 hover:border-primary/40 hover:bg-primary/5 transition-all group"
                     >
                       <action.icon className="w-5 h-5 text-slate-500 group-hover:text-primary transition-colors" />
-                      <span className="text-[10px] font-bold text-slate-500 group-hover:text-slate-300 uppercase tracking-widest">{action.label}</span>
+                      <span className="text-[10px] font-bold text-slate-500 group-hover:text-slate-300 uppercase tracking-wider">{action.label}</span>
                     </button>
                   ))}
                 </div>
@@ -738,14 +719,14 @@ const AgentDetailPage = () => {
 
               {/* Advanced Operations */}
               <div className="space-y-4 pt-4 border-t border-slate-800/50">
-                <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">High-Risk Ops</span>
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Advanced Operations</span>
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     onClick={() => handleQuickAction('persist', {})}
                     className="flex items-center gap-3 p-3 rounded-xl bg-slate-900/40 border border-slate-800/50 hover:border-emerald-500/40 hover:bg-emerald-500/5 transition-all group"
                   >
                     <ShieldAlert className="w-4 h-4 text-slate-500 group-hover:text-emerald-500 transition-colors" />
-                    <span className="text-[10px] font-bold text-slate-500 group-hover:text-slate-300 uppercase tracking-widest">Persist</span>
+                    <span className="text-[10px] font-bold text-slate-500 group-hover:text-slate-300 uppercase tracking-wider">Persistence</span>
                   </button>
                   <button
                     onClick={() => {
@@ -756,14 +737,14 @@ const AgentDetailPage = () => {
                     className="flex items-center gap-3 p-3 rounded-xl bg-slate-900/40 border border-slate-800/50 hover:border-red-500/40 hover:bg-red-500/5 transition-all group"
                   >
                     <Bomb className="w-4 h-4 text-slate-500 group-hover:text-red-500 transition-colors" />
-                    <span className="text-[10px] font-bold text-slate-500 group-hover:text-slate-300 uppercase tracking-widest">Purge</span>
+                    <span className="text-[10px] font-bold text-slate-500 group-hover:text-slate-300 uppercase tracking-wider">Self Destruct</span>
                   </button>
                 </div>
               </div>
 
               {/* Mission Intelligence (Notes & Tags) */}
               <div className="space-y-4 pt-4 border-t border-slate-800/50">
-                <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Mission Intelligence</span>
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Operational Notes</span>
                 
                 <div className="space-y-3">
                   {/* Notes */}
@@ -772,7 +753,7 @@ const AgentDetailPage = () => {
                       <FileText className="w-3.5 h-3.5 text-slate-600 group-focus-within:text-primary transition-colors" />
                     </div>
                     <textarea 
-                      placeholder="Enter mission notes..."
+                      placeholder="Enter endpoint notes..."
                       defaultValue={(() => {
                         try {
                           return JSON.parse(agent.metadata || '{}').notes || '';
@@ -789,7 +770,7 @@ const AgentDetailPage = () => {
                         if (metadata.notes === notes) return;
                         metadata.notes = notes;
                         await agentsApi.updateMetadata(id, metadata);
-                        addToast('Mission notes synchronized', 'success');
+                        addToast('Endpoint notes synchronized', 'success');
                       }}
                       className="w-full bg-slate-900/40 border border-slate-800/50 rounded-xl pl-10 pr-4 py-3 text-[11px] text-slate-300 outline-none focus:border-primary/30 min-h-[100px] resize-none font-sans"
                     />
@@ -876,24 +857,24 @@ const AgentDetailPage = () => {
 
         <div className="flex-1 flex flex-col min-w-0 bg-slate-950/20">
           {/* Module Navigation */}
-          <div className="h-10 border-b border-slate-800/50 bg-slate-900/40 flex items-center px-6 gap-6 shrink-0">
+          <div className="h-12 border-b border-border bg-surface/50 flex items-center px-8 gap-8 shrink-0">
             {[
-              { id: 'console', label: 'Tactical Console', icon: TerminalIcon },
-              { id: 'processes', label: 'Process Audit', icon: Cpu },
-              { id: 'files', label: 'File Exfiltrator', icon: Folder },
-              { id: 'network', label: 'Network Graph', icon: Globe },
+              { id: 'console', label: 'Console', icon: TerminalIcon },
+              { id: 'processes', label: 'Processes', icon: Cpu },
+              { id: 'files', label: 'File Explorer', icon: Folder },
+              { id: 'network', label: 'Network', icon: Globe },
             ].map(tab => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 h-full border-b-2 transition-all ${
+                className={`flex items-center gap-2.5 h-full border-b-2 transition-all relative ${
                   activeTab === tab.id 
                     ? 'border-primary text-white' 
                     : 'border-transparent text-slate-500 hover:text-slate-300'
                 }`}
               >
-                <tab.icon className={`w-3 h-3 ${activeTab === tab.id ? 'text-primary' : 'text-slate-600'}`} />
-                <span className="text-[9px] font-black uppercase tracking-[0.15em]">{tab.label}</span>
+                <tab.icon className={`w-4 h-4 ${activeTab === tab.id ? 'text-primary' : 'text-slate-500'}`} />
+                <span className="text-[11px] font-bold uppercase tracking-wider">{tab.label}</span>
               </button>
             ))}
           </div>
@@ -903,32 +884,17 @@ const AgentDetailPage = () => {
           <div className="flex-1 overflow-hidden relative flex flex-col">
             {activeTab === 'console' && (
               <div className="card flex-1 flex flex-col overflow-hidden relative border-slate-800/50 bg-slate-950/40">
-              <div className="px-5 py-2.5 border-b border-slate-800 flex items-center justify-between bg-slate-900/40 shrink-0">
-                <div className="flex items-center gap-3">
-                  <div className="p-1.5 bg-primary/10 rounded-lg border border-primary/20">
-                    <TerminalIcon className="w-3.5 h-3.5 text-primary" />
-                  </div>
-                  <span className="text-xs font-bold text-white">Live Session</span>
+              <div className="px-5 py-2.5 border-b border-border flex items-center justify-between bg-surface/50 shrink-0">
+                <div className="flex items-center gap-2.5">
+                  <TerminalIcon className="w-3.5 h-3.5 text-primary" />
+                  <span className="text-[10px] font-bold text-white uppercase tracking-widest">Live Shell Session</span>
                 </div>
-                <div className="flex items-center gap-6">
-                  <label className="flex items-center gap-2 cursor-pointer group">
-                    <input 
-                      type="checkbox" 
-                      checked={autoScroll} 
-                      onChange={(e) => setAutoScroll(e.target.checked)}
-                      className="hidden"
-                    />
-                    <div className={`w-7 h-3.5 rounded-full transition-all relative ${autoScroll ? 'bg-primary' : 'bg-slate-700'}`}>
-                      <div className={`absolute top-0.5 w-2.5 h-2.5 bg-white rounded-full transition-all ${autoScroll ? 'left-4' : 'left-0.5'}`} />
-                    </div>
-                    <span className="text-[10px] text-slate-500 uppercase font-bold group-hover:text-slate-300">Auto-Scroll</span>
-                  </label>
-                  <div className="h-4 w-px bg-slate-800 mx-2" />
-                  <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                    <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
-                    {agent.beacon_interval}s interval
+                <div className="flex items-center gap-5">
+                  <div className="flex items-center gap-2">
+                    <span className="w-1 h-1 rounded-full bg-success shadow-[0_0_8px_var(--color-success)]" />
+                    <span className="text-[9px] font-bold text-slate-500 uppercase">{agent.beacon_interval}s Interval</span>
                   </div>
-                  <div className="h-4 w-px bg-slate-800 mx-2" />
+                  <div className="h-3 w-px bg-border" />
                   <button 
                     onClick={() => {
                       if(confirm('Clear console output?')) {
@@ -940,10 +906,10 @@ const AgentDetailPage = () => {
                         addToast('Console cleared', 'info');
                       }
                     }}
-                    className="p-1 rounded hover:bg-white/5 text-slate-500 hover:text-white transition-colors flex items-center gap-2 group"
+                    className="flex items-center gap-1.5 text-slate-500 hover:text-white transition-colors"
                   >
-                    <Trash2 className="w-3 h-3 group-hover:text-error transition-colors" />
-                    <span className="text-[10px] font-bold uppercase tracking-widest">Clear</span>
+                    <Trash2 className="w-3 h-3" />
+                    <span className="text-[9px] font-bold uppercase tracking-wider">Clear</span>
                   </button>
                 </div>
               </div>
@@ -962,9 +928,9 @@ const AgentDetailPage = () => {
                   
                   if (visibleEntries.length === 0) {
                     return (
-                      <div className="h-full flex flex-col items-center justify-center text-slate-600 opacity-20 select-none">
-                        <TerminalIcon className="w-16 h-16 mb-4" />
-                        <p className="text-xs uppercase tracking-[0.4em] font-bold">Awaiting Input</p>
+                      <div className="h-full flex flex-col items-center justify-center opacity-20 pointer-events-none select-none">
+                        <TerminalIcon className="w-10 h-10 mb-4 text-slate-700" />
+                        <span className="text-[10px] font-bold uppercase tracking-[0.4em] text-slate-600">Awaiting Shell Input</span>
                       </div>
                     );
                   }
@@ -979,28 +945,26 @@ const AgentDetailPage = () => {
                     const isPending = res.status === 'pending';
                     
                     return (
-                      <div key={res.id} className={`group animate-in fade-in duration-500 ${isPending ? 'opacity-40 grayscale scale-[0.99] origin-left' : ''}`}>
-                        <div className="flex items-center gap-3 text-slate-500 mb-2">
-                          <span className="text-[10px] bg-slate-800/80 px-2 py-0.5 rounded text-slate-400 font-bold tracking-tighter">
-                            {res.task_type.toUpperCase()}
-                          </span>
-                          <span className="text-[10px] opacity-50">{format(new Date(res.created_at), 'HH:mm:ss')}</span>
+                      <div key={res.id} className={`group animate-in fade-in duration-300 ${isPending ? 'opacity-40' : ''}`}>
+                        <div className="flex items-center gap-3 text-slate-600 mb-1">
+                          <span className="text-[10px] font-mono opacity-50">[{format(new Date(res.created_at), 'HH:mm:ss')}]</span>
+                          <span className="text-[10px] font-bold uppercase tracking-widest">{res.task_type.replace('_json', '')}</span>
                           {isPending ? (
                             <Loader2 className="w-3 h-3 animate-spin text-primary" />
                           ) : res.status === 'success' ? (
-                            <CheckCircle2 className="w-3 h-3 text-success/70" />
+                            <CheckCircle2 className="w-3 h-3 text-success/50" />
                           ) : (
-                            <AlertCircle className="w-3 h-3 text-error/70" />
+                            <AlertCircle className="w-3 h-3 text-error/50" />
                           )}
                         </div>
-                        <div className="pl-6 border-l-2 border-slate-800/50 group-hover:border-primary/30 transition-colors">
-                          <div className="text-white/90 mb-3 flex items-center gap-2">
+                        <div className="pl-4 border-l border-border/50 group-hover:border-primary/30 transition-colors">
+                          <div className="text-white/80 mb-2 flex items-center gap-2 font-mono text-xs">
                             <span className="text-primary/60 font-bold">$</span>
-                            <span className="font-bold tracking-tight">{payload.command || res.task_type}</span>
+                            <span>{payload.command || res.task_type}</span>
                             {payload.path && <span className="text-slate-600 ml-2">[{payload.path}]</span>}
                           </div>
                           {!isPending && (
-                            <div className="bg-black/20 rounded-xl p-4 border border-white/5 shadow-inner">
+                            <div className="bg-black/25 rounded-lg p-3 border border-white/5 shadow-inner">
                               {renderOutput(res)}
                             </div>
                           )}
@@ -1021,10 +985,10 @@ const AgentDetailPage = () => {
                 </button>
               )}
 
-              <form onSubmit={handleCommand} className="p-6 bg-slate-900/50 border-t border-slate-800 shrink-0">
-                <div className="relative group">
-                  <div className="absolute inset-y-0 left-5 flex items-center pointer-events-none">
-                    <span className="text-primary font-bold text-lg">$</span>
+              <form onSubmit={handleCommand} className="p-4 bg-surface/30 border-t border-border shrink-0">
+                <div className="relative flex items-center">
+                  <div className="absolute left-4 flex items-center pointer-events-none select-none">
+                    <span className="text-primary font-bold text-base">$</span>
                   </div>
                   <input
                     type="text"
@@ -1032,17 +996,17 @@ const AgentDetailPage = () => {
                     onChange={(e) => setCommand(e.target.value)}
                     onKeyDown={handleKeyDown}
                     placeholder="Enter system command..."
-                    className="w-full bg-slate-950/50 border-2 border-slate-800 rounded-2xl pl-12 pr-32 py-4 text-white outline-none focus:border-primary/50 focus:bg-slate-950 transition-all font-mono text-base placeholder:text-slate-700"
+                    className="w-full bg-black/60 border border-border rounded-lg pl-10 pr-28 py-3 text-white outline-none focus:border-primary/50 transition-all font-mono text-[13px] placeholder:text-slate-700 shadow-inner"
                     disabled={executing}
                   />
-                  <div className="absolute right-3 inset-y-2">
+                  <div className="absolute right-1.5">
                     <button
                       type="submit"
                       disabled={executing || !command.trim()}
-                      className="h-full px-6 btn-primary rounded-xl font-bold uppercase text-xs tracking-widest disabled:opacity-30 transition-all flex items-center gap-2"
+                      className="px-5 py-1.5 bg-primary text-white rounded-md font-bold uppercase text-[10px] tracking-wider disabled:opacity-30 transition-all flex items-center gap-2 shadow-lg shadow-primary/20"
                     >
-                      {executing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                      Run
+                      {executing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                      RUN
                     </button>
                   </div>
                 </div>
@@ -1054,13 +1018,11 @@ const AgentDetailPage = () => {
             <div className="card flex-1 flex flex-col overflow-hidden relative border-slate-800/50">
               <div className="px-4 py-2 border-b border-slate-800 flex items-center justify-between bg-slate-900/40 shrink-0 gap-4">
                 <div className="flex items-center gap-3">
-                  <div className="p-1.5 bg-primary/10 rounded-lg border border-primary/20">
-                    <Cpu className="w-3.5 h-3.5 text-primary" />
-                  </div>
+                  <Cpu className="w-4 h-4 text-primary" />
                   <div>
-                    <span className="text-xs font-bold text-white block leading-none">Process Manager</span>
-                    <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">
-                      {psList ? `${psList.filter(p => p.name.toLowerCase().includes(psSearchQuery.toLowerCase())).length} Active` : 'Scanning...'}
+                    <span className="text-[11px] font-bold text-white uppercase tracking-wider block">Endpoint Processes</span>
+                    <span className="text-[10px] text-slate-500 font-medium">
+                      {psList ? `${psList.filter(p => p.name.toLowerCase().includes(psSearchQuery.toLowerCase())).length} total processes active` : 'Scanning infrastructure...'}
                     </span>
                   </div>
                 </div>
@@ -1075,7 +1037,7 @@ const AgentDetailPage = () => {
                     }`}
                   >
                     <div className={`w-2 h-2 rounded-full ${isMonitoring ? 'bg-emerald-500 animate-pulse' : 'bg-slate-700'}`} />
-                    <span className="text-[9px] font-black uppercase tracking-widest">Tactical Monitor</span>
+                    <span className="text-[9px] font-bold uppercase tracking-widest">Live Monitor</span>
                   </button>
 
                   <div className="flex-1 max-w-sm relative">

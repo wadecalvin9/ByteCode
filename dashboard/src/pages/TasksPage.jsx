@@ -85,8 +85,8 @@ const TasksPage = () => {
     <div className="dashboard scroll-area">
       <header className="dash-header">
         <div>
-          <h1 className="dash-title">Task Auditor</h1>
-          <p className="dash-subtitle">Real-time monitoring of all dispatched operations</p>
+          <h1 className="dash-title">Task Manager</h1>
+          <p className="dash-subtitle">Monitoring of all dispatched commands</p>
         </div>
         <div className="dash-header-actions">
           <div className="dash-search">
@@ -127,7 +127,7 @@ const TasksPage = () => {
               <h4 className="dash-card__title">Task History</h4>
             </div>
             <div className="text-xs text-slate-500">
-              Showing {filteredTasks.length} tasks
+              Showing {filteredTasks.length} results
             </div>
           </div>
 

@@ -3,15 +3,19 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap');
 
 @theme {
-  --color-background: #0a0e1a;
-  --color-surface: #111827;
-  --color-surface-raised: #1a2236;
-  --color-primary: #3b82f6;
-  --color-primary-hover: #2563eb;
-  --color-border: #1e293b;
-  --color-success: #10b981;
-  --color-error: #ef4444;
-  --color-warning: #f59e0b;
+  --color-background: #0d1117;
+  --color-surface: #161b22;
+  --color-surface-raised: #21262d;
+  --color-primary: #2f81f7;
+  --color-primary-hover: #58a6ff;
+  --color-border: #30363d;
+  --color-border-muted: #21262d;
+  --color-success: #238636;
+  --color-error: #f85149;
+  --color-warning: #d29922;
+  --color-text: #c9d1d9;
+  --color-text-muted: #8b949e;
+  --color-text-header: #f0f6fc;
 
   --font-sans: "Inter", "system-ui", "sans-serif";
   --font-mono: "JetBrains Mono", "monospace";
@@ -29,11 +33,12 @@
 
   body {
     background: var(--color-background);
-    color: #e2e8f0;
+    color: var(--color-text);
     font-family: var(--font-sans);
-    font-size: 13px;
+    font-size: 14px;
     height: 100vh;
     overflow: hidden;
+    line-height: 1.5;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -136,14 +141,13 @@
   }
 
   .sidebar-logo-icon {
-    width: 40px;
-    height: 40px;
-    border-radius: 14px;
-    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: var(--color-primary);
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 4px 20px rgba(59, 130, 246, 0.3);
   }
 
   .sidebar-nav {
@@ -186,8 +190,8 @@
   }
 
   .sidebar-icon-btn.active {
-    background: rgba(59, 130, 246, 0.1);
-    color: #3b82f6;
+    background: var(--color-border-muted);
+    color: var(--color-primary);
   }
 
   .sidebar-icon-btn.disabled {
@@ -357,9 +361,9 @@
   .stat-card:hover { transform: translateY(-2px); }
   .stat-card:hover::before { opacity: 1; }
 
-  .stat-card--blue::before { background: linear-gradient(135deg, rgba(59,130,246,0.05), transparent); }
-  .stat-card--green::before { background: linear-gradient(135deg, rgba(16,185,129,0.05), transparent); }
-  .stat-card--amber::before { background: linear-gradient(135deg, rgba(245,158,11,0.05), transparent); }
+  .stat-card--blue::before { background: var(--color-primary); opacity: 0.03; }
+  .stat-card--green::before { background: var(--color-success); opacity: 0.03; }
+  .stat-card--amber::before { background: var(--color-warning); opacity: 0.03; }
 
   .stat-card__icon {
     width: 42px;
@@ -401,10 +405,10 @@
 
   .stat-card__accent {
     display: inline-block;
-    margin-top: 6px;
-    font-size: 11px;
-    font-weight: 600;
-    color: #475569;
+    margin-top: 8px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--color-text-muted);
   }
 
   /* ── Charts Row ── */

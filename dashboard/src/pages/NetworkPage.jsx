@@ -90,7 +90,10 @@ const NetworkPage = () => {
   };
 
   useEffect(() => {
-    fetchAgents();
+    const init = async () => {
+      await fetchAgents();
+    };
+    init();
     const interval = setInterval(fetchAgents, 5000);
     return () => clearInterval(interval);
   }, []);
@@ -120,8 +123,8 @@ const NetworkPage = () => {
     <div className="dashboard scroll-area">
       <header className="dash-header">
         <div>
-          <h1 className="dash-title">Network Graph</h1>
-          <p className="dash-subtitle">Topology of the active infiltration web</p>
+          <h1 className="dash-title">Network Topology</h1>
+          <p className="dash-subtitle">Visual representation of managed infrastructure</p>
         </div>
         <div className="dash-header-actions">
           <div className="dash-search">
@@ -157,7 +160,7 @@ const NetworkPage = () => {
 
           {/* Central C2 Hub */}
           <NetworkNode 
-            agent={{ hostname: 'ByteCode Server', connection_status: 'online' }} 
+            agent={{ hostname: 'ByteCode Core', connection_status: 'online' }} 
             x={50} y={50} 
             isCenter={true} 
           />

@@ -34,7 +34,7 @@ const ResultRow = ({ result }) => {
               <Download className="w-8 h-8" />
             </div>
             <div>
-              <div className="text-xs font-black text-primary uppercase tracking-[0.2em] mb-1 opacity-70">Binary Intelligence</div>
+              <div className="text-xs font-black text-primary uppercase tracking-wider mb-1 opacity-70">File Resource</div>
               <div className="text-base font-bold text-white">{filename}</div>
               <div className="text-[10px] text-slate-500 font-mono mt-1">{fullPath}</div>
             </div>
@@ -64,7 +64,7 @@ const ResultRow = ({ result }) => {
             }}
             className="px-8 py-3 rounded-xl bg-primary text-white text-[11px] font-black uppercase tracking-[0.2em] hover:bg-primary-hover transition-all shadow-lg shadow-primary/30 flex items-center gap-3"
           >
-            <Download className="w-4 h-4" /> Download Intelligence
+            <Download className="w-4 h-4" /> Download File
           </button>
         </div>
       );
@@ -199,8 +199,8 @@ const DataPage = () => {
     <div className="dashboard scroll-area">
       <header className="dash-header">
         <div>
-          <h1 className="dash-title">Exfiltrated Data</h1>
-          <p className="dash-subtitle">Central repository for all intelligence gathered from nodes</p>
+          <h1 className="dash-title">Data Explorer</h1>
+          <p className="dash-subtitle">Central repository for all data synchronized from endpoints</p>
         </div>
         <div className="dash-header-actions">
           <div className="dash-search">
@@ -227,12 +227,12 @@ const DataPage = () => {
         {loading && results.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-slate-500">
             <RefreshCw className="w-8 h-8 animate-spin mb-4" />
-            <p>Gathering intelligence...</p>
+            <p>Loading records...</p>
           </div>
         ) : filteredResults.length === 0 ? (
           <div className="dash-empty">
             <Database className="w-12 h-12 text-slate-700 mb-4" />
-            <p>No intelligence records found</p>
+            <p>No data records found</p>
           </div>
         ) : (
           <div className="results-list">

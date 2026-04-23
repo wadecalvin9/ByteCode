@@ -237,7 +237,12 @@ const DashboardPage = () => {
         if (isMounted) setLoading(false);
       }
     };
-    fetchData();
+    
+    const init = async () => {
+      await fetchData();
+    };
+    init();
+    
     const interval = setInterval(fetchData, 5000);
     return () => { isMounted = false; clearInterval(interval); };
   }, []);
@@ -262,7 +267,7 @@ const DashboardPage = () => {
     return (
       <div className="dash-loading">
         <Loader2 className="w-8 h-8 text-primary animate-spin" />
-        <p>Synchronizing Fleet Data</p>
+        <p>Initializing Dashboard...</p>
       </div>
     );
   }
@@ -295,25 +300,25 @@ const DashboardPage = () => {
       {/* ── Stat Cards Row ── */}
       <section className="dash-stats">
         <StatCard 
-          title="Total Fleet" 
+          title="Total Nodes" 
           value={stats.total} 
           icon={Server} 
           color="blue"
-          accent={`${stats.total} nodes`}
+          accent="Registered devices"
         />
         <StatCard 
           title="Online" 
           value={stats.active} 
           icon={Wifi} 
           color="green"
-          accent={`${((stats.active / stats.total) * 100 || 0).toFixed(0)}% uptime`}
+          accent="Active sessions"
         />
         <StatCard 
           title="Offline" 
           value={stats.inactive} 
           icon={WifiOff} 
           color="amber"
-          accent="dormant"
+          accent="Dormant nodes"
         />
       </section>
 
@@ -328,7 +333,7 @@ const DashboardPage = () => {
         {/* Node Assets Table */}
         <div className="dash-card dash-card--table">
           <div className="dash-card__header">
-            <h4 className="dash-card__title">Node Assets</h4>
+            <h4 className="dash-card__title">Managed Nodes</h4>
             <Link to="/agents" className="dash-card__link">
               View All <ChevronRight className="w-3.5 h-3.5" />
             </Link>
@@ -380,7 +385,7 @@ const DashboardPage = () => {
                           <button 
                             onClick={() => handlePurge(agent.id, agent.hostname)}
                             className="p-1.5 rounded-lg text-slate-600 hover:text-red-500 hover:bg-red-500/10 transition-all"
-                            title="Purge Zombie Node"
+                            title="Remove Inactive Node"
                           >
                             <Skull className="w-4 h-4" />
                           </button>
@@ -403,7 +408,7 @@ const DashboardPage = () => {
           
           <div className="dash-card flex-1">
             <div className="dash-card__header">
-              <h4 className="dash-card__title">Recent Intelligence</h4>
+              <h4 className="dash-card__title">Activity Logs</h4>
               <Link to="/data" className="dash-card__link">
                 View All <ChevronRight className="w-3.5 h-3.5" />
               </Link>

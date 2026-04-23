@@ -28,26 +28,32 @@ const LoginPage = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-primary/10 via-background to-background">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center p-4 bg-[#05070a]">
+      {/* Background Decor */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-[25%] -left-[10%] w-[50%] h-[50%] bg-primary/5 rounded-full blur-[120px]" />
+        <div className="absolute -bottom-[25%] -right-[10%] w-[50%] h-[50%] bg-primary/5 rounded-full blur-[120px]" />
+      </div>
+
+      <div className="w-full max-w-md relative z-10">
         <div className="text-center mb-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 mb-5 shadow-2xl shadow-primary/20">
-            <Terminal className="w-8 h-8 text-primary" />
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-surface border border-border mb-6 shadow-2xl shadow-primary/5">
+            <Terminal className="w-10 h-10 text-primary" />
           </div>
-          <h1 className="text-4xl font-bold text-white mb-3 tracking-tight">BYTECODE</h1>
-          <p className="text-slate-400 font-medium">C2 Infrastructure Command Center</p>
+          <h1 className="text-3xl font-bold text-white mb-2 tracking-tight uppercase">ByteCode Core</h1>
+          <p className="text-slate-500 font-medium text-sm uppercase tracking-widest">Operator Authentication Gateway</p>
         </div>
 
-        <div className="card p-8 shadow-2xl animate-in fade-in slide-in-from-bottom-8 duration-1000">
+        <div className="card p-10 bg-surface/50 border-border shadow-2xl animate-in fade-in slide-in-from-bottom-8 duration-1000 backdrop-blur-xl">
           <form onSubmit={handleLogin} className="space-y-6">
             <div>
-              <label className="block text-sm font-semibold text-slate-200 mb-3">Operator Username</label>
-              <div className="relative">
-                <User className="absolute left-4 top-3 w-5 h-5 text-slate-500" />
+              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-3">Operator ID</label>
+              <div className="relative group">
+                <User className="absolute left-4 top-3.5 w-4 h-4 text-slate-500 group-focus-within:text-primary transition-colors" />
                 <input
                   type="text"
-                  className="input w-full pl-12"
-                  placeholder="admin"
+                  className="w-full bg-black/40 border border-border rounded-xl pl-12 pr-4 py-3 text-sm text-white outline-none focus:border-primary/50 transition-all placeholder:text-slate-700 shadow-inner"
+                  placeholder="Enter operator username..."
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   required
@@ -56,12 +62,12 @@ const LoginPage = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-slate-200 mb-3">Security Credential</label>
-              <div className="relative">
-                <Lock className="absolute left-4 top-3 w-5 h-5 text-slate-500" />
+              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-3">Security Access Key</label>
+              <div className="relative group">
+                <Lock className="absolute left-4 top-3.5 w-4 h-4 text-slate-500 group-focus-within:text-primary transition-colors" />
                 <input
                   type="password"
-                  className="input w-full pl-12"
+                  className="w-full bg-black/40 border border-border rounded-xl pl-12 pr-4 py-3 text-sm text-white outline-none focus:border-primary/50 transition-all placeholder:text-slate-700 shadow-inner"
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -80,19 +86,19 @@ const LoginPage = () => {
             <button
               type="submit"
               disabled={loading}
-              className="btn btn-primary w-full py-3 text-base font-semibold"
+              className="w-full py-3 rounded-xl bg-primary text-white text-xs font-bold uppercase tracking-wider hover:bg-primary-hover transition-all shadow-lg shadow-primary/20 flex items-center justify-center"
             >
               {loading ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
               ) : (
-                'Establish Uplink'
+                'Authenticate Operator'
               )}
             </button>
           </form>
         </div>
         
-        <p className="mt-10 text-center text-xs text-slate-600 uppercase tracking-[0.2em] font-medium">
-          Authorized Personnel Only • System Level 4
+        <p className="mt-10 text-center text-[10px] text-slate-600 uppercase tracking-[0.2em] font-bold">
+          Restricted Infrastructure • Secure Operations Gateway
         </p>
       </div>
     </div>
