@@ -4,16 +4,58 @@
 
 ---
 
-## 🚀 Deployment
+---
 
-The infrastructure can be deployed as a unified container or managed as independent services:
+## 🛠️ System Requirements
+
+Before deploying the ByteCode infrastructure, ensure your host environment meets the following requirements:
+
+- **Node.js**: version 18.0.0 or higher.
+- **Go (Golang)**: version 1.20 or higher (Required for cross-compiling agents).
+- **Architecture**: Linux, macOS, or Windows (WSL recommended for Linux builds).
+- **Disk Space**: ~500MB for full infrastructure and dependencies.
+
+---
+
+## 📦 Installation
+
+### Global Installation (Recommended)
+
+Install the ByteCode Enterprise suite globally via npm to access the `bytecode` CLI from anywhere:
 
 ```bash
-# Start the orchestration hub
-npm start
+# Install the suite globally
+npm install -g bytecode-c2
+
+# Launch the orchestration hub
+bytecode start
 ```
 
-Your management console will be accessible at **http://localhost:3001**.
+### Local Development Setup
+
+For operators wishing to modify the source or run in a localized environment:
+
+1. **Clone the Repository**:
+   ```bash
+   git clone https://github.com/your-repo/bytecode.git
+   cd bytecode
+   ```
+
+2. **Install All Dependencies**:
+   The root package includes a helper script to install dependencies across the server and dashboard modules:
+   ```bash
+   npm run install-all
+   ```
+
+3. **Build the Management Console**:
+   ```bash
+   npm run build
+   ```
+
+4. **Start the Hub**:
+   ```bash
+   npm start
+   ```
 
 ---
 
