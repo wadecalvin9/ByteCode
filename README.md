@@ -4,8 +4,6 @@
 
 ---
 
----
-
 ## 🛠️ System Requirements
 
 Before deploying the ByteCode infrastructure, ensure your host environment meets the following requirements:
@@ -89,31 +87,7 @@ The orchestration hub initializes with the following default operator credential
 
 ## 🛡️ Operational Ethics
 
-ByteCode is intended exclusively for authorized security auditing, infrastructure monitoring, and educational purposes. Unauthorized use on systems without explicit owner permission is strictly prohibited.
+ByteCode is intended exclusively for authorized security auditing, infrastructure monitoring, and defensive security validation. Unauthorized use on systems without explicit owner permission is strictly prohibited.
 
 ---
-
-## 🔐 Default Credentials
-
-Access the dashboard using the following operator credentials:
-
-- **Username**: `admin`
-- **Password**: `bytecode`
-
----
-
-## 🏗️ Architecture
-
-- **Control Hub**: Node.js backend serving as the central intelligence and routing engine.
-- **Tactical Console**: React-based SPA served directly by the hub for zero-latency operations.
-- **ByteCode Agent**: Multi-platform Go agent (source included in the package for compilation).
-
----
-
-## 🛡️ Disclaimer
-
-ByteCode is intended for authorized security auditing, infrastructure monitoring, and educational purposes only. Unauthorized use on systems you do not own or have explicit permission to test is strictly prohibited.
-
----
-
 
