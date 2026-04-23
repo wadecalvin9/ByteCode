@@ -358,12 +358,12 @@
     opacity: 0;
     transition: opacity 0.3s;
   }
-  .stat-card:hover { transform: translateY(-2px); }
-  .stat-card:hover::before { opacity: 1; }
+  .stat-card:hover { transform: translateY(-4px); border-color: rgba(255, 255, 255, 0.1); }
+  .stat-card:hover::before { opacity: 0.08; }
 
-  .stat-card--blue::before { background: var(--color-primary); opacity: 0.03; }
-  .stat-card--green::before { background: var(--color-success); opacity: 0.03; }
-  .stat-card--amber::before { background: var(--color-warning); opacity: 0.03; }
+  .stat-card--blue::before { background: var(--color-primary); }
+  .stat-card--green::before { background: var(--color-success); }
+  .stat-card--amber::before { background: var(--color-warning); }
 
   .stat-card__icon {
     width: 42px;

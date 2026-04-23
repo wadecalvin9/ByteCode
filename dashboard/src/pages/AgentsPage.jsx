@@ -89,9 +89,9 @@ const AgentsPage = () => {
   }
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-slate-950 overflow-hidden">
+    <div className="flex-1 flex flex-col h-full bg-background overflow-hidden">
       {/* Header Area */}
-      <div className="px-8 py-8 border-b border-border bg-slate-950 shrink-0">
+      <div className="px-8 py-8 border-b border-border bg-background shrink-0">
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-4">
             <div className="p-2.5 bg-primary/10 rounded-xl border border-primary/20 text-primary">

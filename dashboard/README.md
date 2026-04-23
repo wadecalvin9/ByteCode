@@ -1,16 +1,25 @@
-# React + Vite
+# ByteCode Management Console
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+The **ByteCode Management Console** is the centralized operations hub for the ByteCode Enterprise C2 infrastructure. Built with React and optimized for high-density information display, it provides security operators with a professional, real-time interface for fleet management and asset auditing.
 
-Currently, two official plugins are available:
+## 💎 Design Philosophy
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- **Operational Density**: Minimalist UI that prioritizes data and critical intelligence over decorative elements.
+- **Deep Navy & Steel Aesthetic**: A professional, low-strain dark mode theme designed for long-duration operations.
+- **Unified Controls**: Standardized interfaces across all modules (Console, Network, Data Hub) to reduce cognitive load.
 
-## React Compiler
+## 🛠️ Integrated Modules
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **Fleet Inventory**: Real-time status tracking of all registered infrastructure assets.
+- **Advanced Detail Center**: Multi-module environment for process monitoring, file exfiltration, and interactive terminal sessions.
+- **Network Topology**: Dynamic visualization of infrastructure relationships and communication flows.
+- **Payload Builder**: Cross-platform configuration and generation of beacon artifacts.
+- **Data Explorer**: Centralized hub for auditing task results and operational logs.
 
-## Expanding the ESLint configuration
+## ⚡ Tech Stack
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+- **Framework**: React 18
+- **Build Tool**: Vite
+- **Styling**: Tailwind CSS + Vanilla CSS
+- **Iconography**: Lucide React
+- **Routing**: React Router 6

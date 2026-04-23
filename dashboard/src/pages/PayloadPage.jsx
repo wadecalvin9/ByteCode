@@ -66,7 +66,7 @@ const PayloadPage = () => {
   };
 
   return (
-    <div className="flex-1 h-full overflow-y-auto p-8 scrollbar-thin space-y-6">
+    <div className="flex-1 h-full overflow-y-auto p-8 bg-background scrollbar-thin space-y-6">
       <div className="shrink-0">
         <h1 className="text-3xl font-black text-white tracking-tight uppercase">Payload Builder</h1>
         <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mt-1">Configure and generate custom beacon artifacts</p>
@@ -75,7 +75,7 @@ const PayloadPage = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Configuration Section */}
         <div className="lg:col-span-5 flex flex-col gap-6 overflow-y-auto pr-2 scrollbar-thin">
-          <div className="card p-6 border-slate-800/50 bg-slate-900/20">
+          <div className="card p-6 border-slate-800/50 bg-surface/20">
             <div className="flex items-center gap-3 mb-6">
               <div className="p-2 bg-primary/10 rounded-lg border border-primary/20 text-primary">
                 <Cpu className="w-4 h-4" />
@@ -175,8 +175,8 @@ const PayloadPage = () => {
 
         {/* Console & Result Section */}
         <div className="lg:col-span-7 flex flex-col gap-6 min-h-0">
-          <div className="card flex-1 flex flex-col bg-black/40 border-slate-800/50 overflow-hidden">
-            <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/40">
+          <div className="card flex-1 flex flex-col overflow-hidden relative border-slate-800/50 bg-surface/40">
+            <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-surface/40">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
                 <span className="text-[11px] font-bold uppercase tracking-wider text-white">Build Console</span>

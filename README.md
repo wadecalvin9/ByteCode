@@ -1,34 +1,53 @@
-# ⚡ ByteCode Tactical C2
+# 🛡️ ByteCode Enterprise C2
 
-**ByteCode** is a modern, unified Command and Control (C2) framework designed for tactical infrastructure monitoring and security audit exercises. It features a high-fidelity React dashboard, a robust Node.js backend, and a portable CLI for instant deployment.
-
----
-
-## 🚀 Instant Deployment
-
-Install the system globally via npm:
-
-```bash
-npm install -g bytecode-c2
-```
-
-Start the tactical hub:
-
-```bash
-bytecode start
-```
-
-Your dashboard will be available at **http://localhost:3001**.
+**ByteCode** is a professional, high-fidelity Command and Control (C2) infrastructure designed for advanced security auditing, infrastructure monitoring, and defensive posture validation. It features a sophisticated React-based management console, a robust Node.js orchestration engine, and cross-platform Go agents.
 
 ---
 
-## ✨ Features
+## 🚀 Deployment
 
-- **Unified Infrastructure**: A single command spins up both the API and the Management Console.
-- **Glitch-Tech Dashboard**: Premium, high-density interface for real-time asset intelligence.
-- **Tactical Console**: Interactive terminal experience with persistent session clearing and smart history.
-- **Persistent Operations**: Built-in modules for Windows registry persistence and automated agent purging (self-destruct).
-- **Auto-Seeding**: Automatic initialization with secure default credentials on first run.
+The infrastructure can be deployed as a unified container or managed as independent services:
+
+```bash
+# Start the orchestration hub
+npm start
+```
+
+Your management console will be accessible at **http://localhost:3001**.
+
+---
+
+## ✨ Core Infrastructure Features
+
+- **Fleet Intelligence & Inventory**: A high-density dashboard providing a unified overview of all infrastructure endpoints with real-time connectivity telemetry.
+- **Advanced Endpoint Auditing**: Integrated detail center for deep asset inspection, including process mapping, file system exfiltration, and network monitoring.
+- **Cross-Platform Payload Builder**: Automated, cross-compilation engine for generating secure Go-based beacons tailored for Windows and Linux environments.
+- **Malleable Transport Profiles**: Fine-grained control over temporal signatures (jitter/intervals) and transport layer masquerading (custom headers/User-Agent).
+- **Network Topology Mapping**: Real-time visualization of infrastructure relationships and data propagation paths.
+- **Secure Operational Gateway**: Professional-grade authentication gateway and centralized data explorer for operational intelligence.
+
+---
+
+## 🔐 Default Access
+
+The orchestration hub initializes with the following default operator credentials:
+
+- **Username**: `admin`
+- **Password**: `bytecode`
+
+---
+
+## 🏗️ Technical Architecture
+
+- **Management Console**: High-performance React SPA designed for operational density and real-time visualization.
+- **Orchestration Hub**: Node.js backend providing secure API routing, task scheduling, and data persistence.
+- **Core Agents**: High-performance Go-based beacons designed for portability and minimal footprint.
+
+---
+
+## 🛡️ Operational Ethics
+
+ByteCode is intended exclusively for authorized security auditing, infrastructure monitoring, and educational purposes. Unauthorized use on systems without explicit owner permission is strictly prohibited.
 
 ---
 

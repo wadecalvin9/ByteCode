@@ -883,7 +883,7 @@ const AgentDetailPage = () => {
           {/* Module Content */}
           <div className="flex-1 overflow-hidden relative flex flex-col">
             {activeTab === 'console' && (
-              <div className="card flex-1 flex flex-col overflow-hidden relative border-slate-800/50 bg-slate-950/40">
+              <div className="card flex-1 flex flex-col overflow-hidden relative border-slate-800/50 bg-surface/40">
               <div className="px-5 py-2.5 border-b border-border flex items-center justify-between bg-surface/50 shrink-0">
                 <div className="flex items-center gap-2.5">
                   <TerminalIcon className="w-3.5 h-3.5 text-primary" />
