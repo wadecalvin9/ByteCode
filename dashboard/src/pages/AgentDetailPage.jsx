@@ -25,8 +25,12 @@ import {
   ShieldAlert,
   Bomb,
   Download,
-  Activity as ActivityIcon
+  Activity as ActivityIcon,
+  Search,
+  Database,
+  ChevronDown
 } from 'lucide-react';
+
 import { agentsApi, tasksApi } from '../utils/api';
 import { format, formatDistanceToNow } from 'date-fns';
 
@@ -46,12 +50,18 @@ const AgentDetailPage = () => {
   const [toasts, setToasts] = useState([]);
   const [pendingTasks, setPendingTasks] = useState([]);
   const [autoScroll, setAutoScroll] = useState(true);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [lastClearedResultId, setLastClearedResultId] = useState(() => {
+
     return localStorage.getItem(`clear_id_${id}`);
   });
   const [isMonitoring, setIsMonitoring] = useState(false);
-  const [prevPsList, setPrevPsList] = useState([]);
-  const [prevNetList, setPrevNetList] = useState([]);
+  const seenPsPids = useRef(new Set());
+  const seenNetKeys = useRef(new Set());
+  const [highlightedPids, setHighlightedPids] = useState(new Set());
+  const [highlightedNetKeys, setHighlightedNetKeys] = useState(new Set());
+
+
   const lastResultsLength = useRef(0);
   const resultEndRef = useRef(null);
 
@@ -154,7 +164,8 @@ const AgentDetailPage = () => {
     } catch (err) {
       alert(err.message);
     }
-  }, [id, fetchDetails]);
+  }, [id, fetchDetails, addToast]);
+
 
   // Real-Time Heartbeat Monitor
   useEffect(() => {
@@ -394,12 +405,58 @@ const AgentDetailPage = () => {
       );
     }
 
+    // Smart JSON detection and rendering
+    if (res.output && (res.output.trim().startsWith('{') || res.output.trim().startsWith('['))) {
+      try {
+        const parsed = JSON.parse(res.output);
+        
+        // If it's a simple list (like process info or system info)
+        if (Array.isArray(parsed) || typeof parsed === 'object') {
+          return (
+            <div className="bg-slate-900/40 rounded-xl border border-slate-800/50 overflow-hidden">
+              <div className="px-4 py-2 border-b border-slate-800/50 bg-slate-900/60 flex items-center justify-between">
+                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Structured Intelligence Data</span>
+                <button 
+                  onClick={() => {
+                    const blob = new Blob([res.output], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `result_${res.id}.json`;
+                    a.click();
+                  }}
+                  className="text-[9px] font-bold text-primary hover:text-white transition-colors"
+                >
+                  Export Raw
+                </button>
+              </div>
+              <div className="p-4 max-h-[400px] overflow-y-auto scrollbar-thin">
+                 {/* Prettified JSON view */}
+                 <pre className="text-[11px] text-emerald-500/90 font-mono leading-relaxed">
+                   {JSON.stringify(parsed, null, 2)}
+                 </pre>
+              </div>
+            </div>
+          );
+        }
+      } catch {
+        // Not valid JSON, fall back to default
+      }
+
+    }
+
     return (
-      <pre className="whitespace-pre-wrap text-slate-300 bg-slate-900/50 p-3 rounded-lg border border-slate-800 overflow-x-auto font-mono text-[11px] leading-relaxed">
+      <pre className="whitespace-pre-wrap text-slate-300 bg-slate-900/30 p-4 rounded-xl border border-slate-800/30 overflow-x-auto font-mono text-[11px] leading-relaxed shadow-inner">
         {res.output || (res.error ? `ERROR: ${res.error}` : 'No output')}
       </pre>
     );
+
   };
+
+  const agent = data?.agent;
+  const results = data?.results || [];
+  const isOnline = agent && (new Date() - new Date(agent.last_seen)) < 120000;
+
 
   const psList = useMemo(() => {
     const results = data?.results || [];
@@ -414,26 +471,64 @@ const AgentDetailPage = () => {
   }, [data?.results]);
 
   useEffect(() => {
-    if (psList) {
-      setPrevPsList(curr => {
-        if (JSON.stringify(curr) !== JSON.stringify(psList)) {
-          return curr.length === 0 ? psList : curr;
+    if (psList && psList.length > 0) {
+      if (seenPsPids.current.size === 0) {
+        // Initial load: mark all as seen, no highlights
+        psList.forEach(p => seenPsPids.current.add(p.pid));
+      } else if (isMonitoring) {
+        // Subsequent load: find truly new ones
+        const newPids = new Set();
+        psList.forEach(p => {
+          if (!seenPsPids.current.has(p.pid)) {
+            newPids.add(p.pid);
+            seenPsPids.current.add(p.pid);
+          }
+        });
+        if (newPids.size > 0) {
+          setHighlightedPids(prev => new Set([...prev, ...newPids]));
+          // Optional: clear highlights after 10 seconds
+          setTimeout(() => {
+            setHighlightedPids(prev => {
+              const next = new Set(prev);
+              newPids.forEach(id => next.delete(id));
+              return next;
+            });
+          }, 10000);
         }
-        return curr;
-      });
+      }
     }
-  }, [psList]);
+  }, [psList, isMonitoring]);
 
   useEffect(() => {
-    if (netList) {
-      setPrevNetList(curr => {
-        if (JSON.stringify(curr) !== JSON.stringify(netList)) {
-          return curr.length === 0 ? netList : curr;
+    if (netList && netList.length > 0) {
+      if (seenNetKeys.current.size === 0) {
+        // Initial load: mark all as seen
+        netList.forEach(c => seenNetKeys.current.add(`${c.local}-${c.remote}`));
+      } else if (isMonitoring) {
+        const newKeys = new Set();
+        netList.forEach(c => {
+          const key = `${c.local}-${c.remote}`;
+          if (!seenNetKeys.current.has(key)) {
+            newKeys.add(key);
+            seenNetKeys.current.add(key);
+          }
+        });
+        if (newKeys.size > 0) {
+          setHighlightedNetKeys(prev => new Set([...prev, ...newKeys]));
+          setTimeout(() => {
+            setHighlightedNetKeys(prev => {
+              const next = new Set(prev);
+              newKeys.forEach(id => next.delete(id));
+              return next;
+            });
+          }, 10000);
         }
-        return curr;
-      });
+      }
     }
-  }, [netList]);
+  }, [netList, isMonitoring]);
+
+
+
 
   if (!data) {
     return (
@@ -462,7 +557,8 @@ const AgentDetailPage = () => {
     );
   }
 
-  const { agent, results } = data;
+  // Data is guaranteed to exist beyond this point
+
 
 
   const getLatestPsResult = () => psList;
@@ -507,6 +603,16 @@ const AgentDetailPage = () => {
       <div className="shrink-0 h-16 border-b border-slate-800/50 bg-slate-900/20 backdrop-blur-md flex items-center justify-between px-8 z-30">
         <div className="flex items-center gap-6">
           <button 
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            className={`p-2 rounded-xl transition-all ${sidebarCollapsed ? 'bg-primary/20 text-primary' : 'text-slate-500 hover:text-white'}`}
+            title="Toggle Intel Panel"
+          >
+            <ActivityIcon className="w-5 h-5" />
+          </button>
+          
+          <div className="h-8 w-px bg-slate-800/50" />
+
+          <button 
             onClick={() => navigate(-1)}
             className="p-2 rounded-xl hover:bg-white/5 text-slate-500 hover:text-white transition-all group"
           >
@@ -536,223 +642,241 @@ const AgentDetailPage = () => {
                   Real-time
                 </div>
               )}
-              <div className="w-1.5 h-1.5 rounded-full bg-slate-800" />
-              <span className="text-[11px] font-mono text-slate-400">{agent.ip_address || '0.0.0.0'}</span>
-
+              <span className="text-[11px] font-black text-white tracking-[0.2em] uppercase leading-none">NODE :: {agent.hostname}</span>
+              <span className="text-[9px] font-mono text-slate-500 leading-none">{agent.id}</span>
             </div>
           </div>
+        </div>
 
+        <div className="flex items-center gap-8">
           <div className="flex flex-col items-end">
-            <span className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-1">Last Contact</span>
+            <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-0.5">Last Contact</span>
             <div className="flex items-center gap-2">
-              <Clock className="w-3 h-3 text-slate-600" />
-              <span className="text-[11px] font-mono text-slate-300">
-                {agent.last_seen ? formatDistanceToNow(new Date(agent.last_seen), { addSuffix: true }) : 'Never'}
-              </span>
+              <div className={`w-1.5 h-1.5 rounded-full ${agent.connection_status === 'online' ? 'bg-sky-400 shadow-[0_0_8px_#38bdf8]' : 'bg-slate-700'}`} />
+              <span className="text-[10px] font-bold text-slate-300">{agent.last_seen ? formatDistanceToNow(new Date(agent.last_seen)) : 'Never'} ago</span>
             </div>
           </div>
-
-          <div className="h-10 w-px bg-slate-800 mx-2" />
+          
+          <div className="h-6 w-px bg-slate-800" />
 
           <button 
             onClick={handleKillAgent}
-            className="px-6 py-2.5 rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all border border-red-500/20 font-black text-[10px] uppercase tracking-[0.2em] shadow-lg shadow-red-500/5"
+            className="px-4 py-1.5 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all border border-red-500/20 font-black text-[9px] uppercase tracking-[0.2em] flex items-center gap-2 group"
           >
-            Kill Node
+            KILL NODE <Bomb className="w-3 h-3 group-hover:animate-bounce" />
           </button>
         </div>
       </div>
 
+
       {/* Main Content Area */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left Sidebar: Asset Intelligence */}
-        <div className="w-80 border-r border-slate-800/50 flex flex-col bg-slate-900/10 overflow-y-auto scrollbar-thin">
-          <div className="p-6 space-y-6">
-            {/* System Specs */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Asset Intelligence</span>
-                <ShieldCheck className="w-3.5 h-3.5 text-primary/50" />
-              </div>
-              
-              <div className="space-y-2">
-                {[
+        {!sidebarCollapsed && (
+          <div className="w-80 border-r border-slate-800/50 flex flex-col bg-slate-900/10 overflow-y-auto scrollbar-thin transition-all">
+            <div className="p-6 space-y-6">
+              {/* System Specs */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Asset Intelligence</span>
+                  <ShieldCheck className="w-3.5 h-3.5 text-primary/50" />
+                </div>
+                
+                <div className="space-y-2">
+                  {[
                   { label: 'OS Platform', value: agent.os, icon: Monitor },
                   { label: 'Architecture', value: agent.arch, icon: Cpu },
                   { label: 'Process ID', value: agent.pid, icon: ActivityIcon },
-                  { label: 'Integrity', value: 'Level 4 (System)', icon: ShieldCheck },
+                  { 
+                    label: 'Integrity', 
+                    value: (
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-0.5">
+                          <div className="h-1.5 w-0.5 bg-emerald-500 rounded-full" />
+                          <div className="h-2.5 w-0.5 bg-emerald-500 rounded-full" />
+                          <div className="h-3.5 w-0.5 bg-emerald-500 rounded-full" />
+                          <div className="h-4.5 w-0.5 bg-emerald-500/30 rounded-full" />
+                        </div>
+                        <span className="text-emerald-400 font-bold tracking-tight">Level 4 (System)</span>
+                      </div>
+                    ), 
+                    icon: ShieldCheck 
+                  },
                 ].map((item, i) => (
-                  <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-slate-900/40 border border-slate-800/50 group hover:border-primary/20 transition-all">
-                    <div className="flex items-center gap-3">
-                      <item.icon className="w-3.5 h-3.5 text-slate-600 group-hover:text-primary transition-colors" />
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{item.label}</span>
+                    <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-slate-900/40 border border-slate-800/50 group hover:border-primary/20 transition-all">
+                      <div className="flex items-center gap-3">
+                        <item.icon className="w-3.5 h-3.5 text-slate-600 group-hover:text-primary transition-colors" />
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{item.label}</span>
+                      </div>
+                      <span className="text-[11px] font-mono text-white/80">{item.value}</span>
                     </div>
-                    <span className="text-[11px] font-mono text-white/80">{item.value}</span>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
 
-            {/* Tactical Actions */}
-            <div className="space-y-4 pt-4 border-t border-slate-800/50">
-              <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Quick Dispatch</span>
-              <div className="grid grid-cols-2 gap-2">
-                {[
-                  { label: 'Screenshot', icon: Monitor, type: 'screenshot' },
-                  { label: 'Shell Info', icon: TerminalIcon, type: 'system_info' },
-                  { label: 'Net Check', icon: Wifi, type: 'netstat_json' },
-                  { label: 'Process Sc', icon: Cpu, type: 'ps_json' },
-                ].map((action, i) => (
+              {/* Tactical Actions */}
+              <div className="space-y-4 pt-4 border-t border-slate-800/50">
+                <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Quick Dispatch</span>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { label: 'Screenshot', icon: Monitor, type: 'screenshot' },
+                    { label: 'Shell Info', icon: TerminalIcon, type: 'system_info' },
+                    { label: 'Net Check', icon: Wifi, type: 'netstat_json' },
+                    { label: 'Process Sc', icon: Cpu, type: 'ps_json' },
+                  ].map((action, i) => (
+                    <button
+                      key={i}
+                      onClick={() => handleQuickAction(action.type, {})}
+                      className="flex flex-col items-center justify-center gap-3 p-4 rounded-xl bg-slate-900/40 border border-slate-800/50 hover:border-primary/40 hover:bg-primary/5 transition-all group"
+                    >
+                      <action.icon className="w-5 h-5 text-slate-500 group-hover:text-primary transition-colors" />
+                      <span className="text-[10px] font-bold text-slate-500 group-hover:text-slate-300 uppercase tracking-widest">{action.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Advanced Operations */}
+              <div className="space-y-4 pt-4 border-t border-slate-800/50">
+                <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">High-Risk Ops</span>
+                <div className="grid grid-cols-2 gap-2">
                   <button
-                    key={i}
-                    onClick={() => handleQuickAction(action.type, {})}
-                    className="flex flex-col items-center justify-center gap-3 p-4 rounded-xl bg-slate-900/40 border border-slate-800/50 hover:border-primary/40 hover:bg-primary/5 transition-all group"
+                    onClick={() => handleQuickAction('persist', {})}
+                    className="flex items-center gap-3 p-3 rounded-xl bg-slate-900/40 border border-slate-800/50 hover:border-emerald-500/40 hover:bg-emerald-500/5 transition-all group"
                   >
-                    <action.icon className="w-5 h-5 text-slate-500 group-hover:text-primary transition-colors" />
-                    <span className="text-[10px] font-bold text-slate-500 group-hover:text-slate-300 uppercase tracking-widest">{action.label}</span>
+                    <ShieldAlert className="w-4 h-4 text-slate-500 group-hover:text-emerald-500 transition-colors" />
+                    <span className="text-[10px] font-bold text-slate-500 group-hover:text-slate-300 uppercase tracking-widest">Persist</span>
                   </button>
-                ))}
+                  <button
+                    onClick={() => {
+                      if(confirm('WARNING: Self-destruct will remove the agent binary and all traces from the target system. Proceed?')) {
+                        handleQuickAction('self_destruct', {});
+                      }
+                    }}
+                    className="flex items-center gap-3 p-3 rounded-xl bg-slate-900/40 border border-slate-800/50 hover:border-red-500/40 hover:bg-red-500/5 transition-all group"
+                  >
+                    <Bomb className="w-4 h-4 text-slate-500 group-hover:text-red-500 transition-colors" />
+                    <span className="text-[10px] font-bold text-slate-500 group-hover:text-slate-300 uppercase tracking-widest">Purge</span>
+                  </button>
+                </div>
               </div>
-            </div>
 
-            {/* Advanced Operations */}
-            <div className="space-y-4 pt-4 border-t border-slate-800/50">
-              <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">High-Risk Ops</span>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => handleQuickAction('persist', {})}
-                  className="flex items-center gap-3 p-3 rounded-xl bg-slate-900/40 border border-slate-800/50 hover:border-emerald-500/40 hover:bg-emerald-500/5 transition-all group"
-                >
-                  <ShieldAlert className="w-4 h-4 text-slate-500 group-hover:text-emerald-500 transition-colors" />
-                  <span className="text-[10px] font-bold text-slate-500 group-hover:text-slate-300 uppercase tracking-widest">Persist</span>
-                </button>
-                <button
-                  onClick={() => {
-                    if(confirm('WARNING: Self-destruct will remove the agent binary and all traces from the target system. Proceed?')) {
-                      handleQuickAction('self_destruct', {});
-                    }
-                  }}
-                  className="flex items-center gap-3 p-3 rounded-xl bg-slate-900/40 border border-slate-800/50 hover:border-red-500/40 hover:bg-red-500/5 transition-all group"
-                >
-                  <Bomb className="w-4 h-4 text-slate-500 group-hover:text-red-500 transition-colors" />
-                  <span className="text-[10px] font-bold text-slate-500 group-hover:text-slate-300 uppercase tracking-widest">Purge</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Mission Intelligence (Notes & Tags) */}
-            <div className="space-y-4 pt-4 border-t border-slate-800/50">
-              <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Mission Intelligence</span>
-              
-              <div className="space-y-3">
-                {/* Notes */}
-                <div className="relative group">
-                  <div className="absolute top-3 left-3 pointer-events-none">
-                    <FileText className="w-3.5 h-3.5 text-slate-600 group-focus-within:text-primary transition-colors" />
+              {/* Mission Intelligence (Notes & Tags) */}
+              <div className="space-y-4 pt-4 border-t border-slate-800/50">
+                <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Mission Intelligence</span>
+                
+                <div className="space-y-3">
+                  {/* Notes */}
+                  <div className="relative group">
+                    <div className="absolute top-3 left-3 pointer-events-none">
+                      <FileText className="w-3.5 h-3.5 text-slate-600 group-focus-within:text-primary transition-colors" />
+                    </div>
+                    <textarea 
+                      placeholder="Enter mission notes..."
+                      defaultValue={(() => {
+                        try {
+                          return JSON.parse(agent.metadata || '{}').notes || '';
+                        } catch { return ''; }
+                      })()}
+                      onBlur={async (e) => {
+                        const notes = e.target.value;
+                        let metadata = {};
+                        try { 
+                          metadata = JSON.parse(agent.metadata || '{}'); 
+                        } catch {
+                          /* ignore parsing error */
+                        }
+                        if (metadata.notes === notes) return;
+                        metadata.notes = notes;
+                        await agentsApi.updateMetadata(id, metadata);
+                        addToast('Mission notes synchronized', 'success');
+                      }}
+                      className="w-full bg-slate-900/40 border border-slate-800/50 rounded-xl pl-10 pr-4 py-3 text-[11px] text-slate-300 outline-none focus:border-primary/30 min-h-[100px] resize-none font-sans"
+                    />
                   </div>
-                  <textarea 
-                    placeholder="Enter mission notes..."
-                    defaultValue={(() => {
-                      try {
-                        return JSON.parse(agent.metadata || '{}').notes || '';
-                      } catch { return ''; }
-                    })()}
-                    onBlur={async (e) => {
-                      const notes = e.target.value;
-                      let metadata = {};
+
+                  {/* Tags */}
+                  <div className="flex flex-wrap gap-2">
+                    {(() => {
+                      let tags = [];
                       try { 
-                        metadata = JSON.parse(agent.metadata || '{}'); 
-                      } catch {
+                        tags = JSON.parse(agent.metadata || '{}').tags || []; 
+                      } catch { 
                         /* ignore parsing error */
                       }
-                      if (metadata.notes === notes) return;
-                      metadata.notes = notes;
-                      await agentsApi.updateMetadata(id, metadata);
-                      addToast('Mission notes synchronized', 'success');
-                    }}
-                    className="w-full bg-slate-900/40 border border-slate-800/50 rounded-xl pl-10 pr-4 py-3 text-[11px] text-slate-300 outline-none focus:border-primary/30 min-h-[100px] resize-none font-sans"
-                  />
+                      return (
+                        <>
+                          {tags.map((tag, i) => (
+                            <span key={i} className="px-2 py-0.5 rounded-lg bg-primary/10 border border-primary/20 text-[9px] font-black text-primary uppercase tracking-widest flex items-center gap-1.5">
+                              {tag}
+                              <button 
+                                onClick={async () => {
+                                  let metadata = {};
+                                  try { 
+                                    metadata = JSON.parse(agent.metadata || '{}'); 
+                                  } catch {
+                                    /* ignore parsing error */
+                                  }
+                                  metadata.tags = (metadata.tags || []).filter(t => t !== tag);
+                                  await agentsApi.updateMetadata(id, metadata);
+                                  fetchDetails();
+                                }}
+                                className="hover:text-white"
+                              >
+                                ×
+                              </button>
+                            </span>
+                          ))}
+                          <button 
+                            onClick={() => {
+                              const tag = prompt('Enter new tag:');
+                              if (tag) {
+                                (async () => {
+                                  let metadata = {};
+                                  try { 
+                                    metadata = JSON.parse(agent.metadata || '{}'); 
+                                  } catch {
+                                    /* ignore parsing error */
+                                  }
+                                  metadata.tags = [...(metadata.tags || []), tag];
+                                  await agentsApi.updateMetadata(id, metadata);
+                                  fetchDetails();
+                                })();
+                              }
+                            }}
+                            className="px-2 py-0.5 rounded-lg border border-slate-800 border-dashed text-[9px] font-black text-slate-600 uppercase tracking-widest hover:border-slate-600 hover:text-slate-400 transition-all"
+                          >
+                            + Add Tag
+                          </button>
+                        </>
+                      );
+                    })()}
+                  </div>
+
                 </div>
+              </div>
 
-                {/* Tags */}
-                <div className="flex flex-wrap gap-2">
-                  {(() => {
-                    let tags = [];
-                    try { 
-                      tags = JSON.parse(agent.metadata || '{}').tags || []; 
-                    } catch { 
-                      /* ignore parsing error */
-                    }
-                    return (
-                      <>
-                        {tags.map((tag, i) => (
-                          <span key={i} className="px-2 py-0.5 rounded-lg bg-primary/10 border border-primary/20 text-[9px] font-black text-primary uppercase tracking-widest flex items-center gap-1.5">
-                            {tag}
-                            <button 
-                              onClick={async () => {
-                                let metadata = {};
-                                try { 
-                                  metadata = JSON.parse(agent.metadata || '{}'); 
-                                } catch {
-                                  /* ignore parsing error */
-                                }
-                                metadata.tags = (metadata.tags || []).filter(t => t !== tag);
-                                await agentsApi.updateMetadata(id, metadata);
-                                fetchDetails();
-                              }}
-                              className="hover:text-white"
-                            >
-                              ×
-                            </button>
-                          </span>
-                        ))}
-                        <button 
-                          onClick={() => {
-                            const tag = prompt('Enter new tag:');
-                            if (tag) {
-                              (async () => {
-                                let metadata = {};
-                                try { 
-                                  metadata = JSON.parse(agent.metadata || '{}'); 
-                                } catch {
-                                  /* ignore parsing error */
-                                }
-                                metadata.tags = [...(metadata.tags || []), tag];
-                                await agentsApi.updateMetadata(id, metadata);
-                                fetchDetails();
-                              })();
-                            }
-                          }}
-                          className="px-2 py-0.5 rounded-lg border border-slate-800 border-dashed text-[9px] font-black text-slate-600 uppercase tracking-widest hover:border-slate-600 hover:text-slate-400 transition-all"
-                        >
-                          + Add Tag
-                        </button>
-                      </>
-                    );
-                  })()}
+              {/* Health Monitor */}
+              <div className="p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/10">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-[10px] font-black text-emerald-500/70 uppercase tracking-widest">Connectivity</span>
+                  <Wifi className="w-3.5 h-3.5 text-emerald-500/50" />
                 </div>
-
+                <div className="h-1.5 w-full bg-emerald-500/10 rounded-full overflow-hidden">
+                  <div className="h-full bg-emerald-500 w-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+                </div>
+                <p className="text-[9px] text-emerald-500/60 font-bold mt-2 uppercase tracking-tighter">Stable Beacon • {agent.beacon_interval}s Interval</p>
               </div>
-            </div>
-
-            {/* Health Monitor */}
-            <div className="p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/10">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-[10px] font-black text-emerald-500/70 uppercase tracking-widest">Connectivity</span>
-                <Wifi className="w-3.5 h-3.5 text-emerald-500/50" />
-              </div>
-              <div className="h-1.5 w-full bg-emerald-500/10 rounded-full overflow-hidden">
-                <div className="h-full bg-emerald-500 w-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
-              </div>
-              <p className="text-[9px] text-emerald-500/60 font-bold mt-2 uppercase tracking-tighter">Stable Beacon • {agent.beacon_interval}s Interval</p>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Right Module: Interaction Workspace */}
+
+
         <div className="flex-1 flex flex-col min-w-0 bg-slate-950/20">
           {/* Module Navigation */}
-          <div className="h-12 border-b border-slate-800/50 bg-slate-900/40 flex items-center px-6 gap-8 shrink-0">
+          <div className="h-10 border-b border-slate-800/50 bg-slate-900/40 flex items-center px-6 gap-6 shrink-0">
             {[
               { id: 'console', label: 'Tactical Console', icon: TerminalIcon },
               { id: 'processes', label: 'Process Audit', icon: Cpu },
@@ -768,22 +892,23 @@ const AgentDetailPage = () => {
                     : 'border-transparent text-slate-500 hover:text-slate-300'
                 }`}
               >
-                <tab.icon className={`w-3.5 h-3.5 ${activeTab === tab.id ? 'text-primary' : 'text-slate-600'}`} />
-                <span className="text-[10px] font-black uppercase tracking-[0.15em]">{tab.label}</span>
+                <tab.icon className={`w-3 h-3 ${activeTab === tab.id ? 'text-primary' : 'text-slate-600'}`} />
+                <span className="text-[9px] font-black uppercase tracking-[0.15em]">{tab.label}</span>
               </button>
             ))}
           </div>
+
 
           {/* Module Content */}
           <div className="flex-1 overflow-hidden relative flex flex-col">
             {activeTab === 'console' && (
               <div className="card flex-1 flex flex-col overflow-hidden relative border-slate-800/50 bg-slate-950/40">
-              <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-900/40 shrink-0">
+              <div className="px-5 py-2.5 border-b border-slate-800 flex items-center justify-between bg-slate-900/40 shrink-0">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-primary/10 rounded-lg border border-primary/20">
-                    <TerminalIcon className="w-4 h-4 text-primary" />
+                  <div className="p-1.5 bg-primary/10 rounded-lg border border-primary/20">
+                    <TerminalIcon className="w-3.5 h-3.5 text-primary" />
                   </div>
-                  <span className="text-sm font-bold text-white">Live Session</span>
+                  <span className="text-xs font-bold text-white">Live Session</span>
                 </div>
                 <div className="flex items-center gap-6">
                   <label className="flex items-center gap-2 cursor-pointer group">
@@ -793,14 +918,14 @@ const AgentDetailPage = () => {
                       onChange={(e) => setAutoScroll(e.target.checked)}
                       className="hidden"
                     />
-                    <div className={`w-8 h-4 rounded-full transition-all relative ${autoScroll ? 'bg-primary' : 'bg-slate-700'}`}>
-                      <div className={`absolute top-1 w-2 h-2 bg-white rounded-full transition-all ${autoScroll ? 'left-5' : 'left-1'}`} />
+                    <div className={`w-7 h-3.5 rounded-full transition-all relative ${autoScroll ? 'bg-primary' : 'bg-slate-700'}`}>
+                      <div className={`absolute top-0.5 w-2.5 h-2.5 bg-white rounded-full transition-all ${autoScroll ? 'left-4' : 'left-0.5'}`} />
                     </div>
-                    <span className="text-xs text-slate-500 uppercase font-bold group-hover:text-slate-300">Auto-Scroll</span>
+                    <span className="text-[10px] text-slate-500 uppercase font-bold group-hover:text-slate-300">Auto-Scroll</span>
                   </label>
                   <div className="h-4 w-px bg-slate-800 mx-2" />
-                  <div className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-wider">
-                    <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
+                  <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                    <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
                     {agent.beacon_interval}s interval
                   </div>
                   <div className="h-4 w-px bg-slate-800 mx-2" />
@@ -815,13 +940,14 @@ const AgentDetailPage = () => {
                         addToast('Console cleared', 'info');
                       }
                     }}
-                    className="p-1.5 rounded hover:bg-white/5 text-slate-500 hover:text-white transition-colors flex items-center gap-2 group"
+                    className="p-1 rounded hover:bg-white/5 text-slate-500 hover:text-white transition-colors flex items-center gap-2 group"
                   >
-                    <Trash2 className="w-3.5 h-3.5 group-hover:text-error transition-colors" />
+                    <Trash2 className="w-3 h-3 group-hover:text-error transition-colors" />
                     <span className="text-[10px] font-bold uppercase tracking-widest">Clear</span>
                   </button>
                 </div>
               </div>
+
               
               <div className="flex-1 overflow-y-auto p-4 space-y-3 font-mono scrollbar-thin bg-black/40">
                 {(() => {
@@ -926,14 +1052,14 @@ const AgentDetailPage = () => {
 
           {activeTab === 'processes' && (
             <div className="card flex-1 flex flex-col overflow-hidden relative border-slate-800/50">
-              <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/40 shrink-0 gap-4">
+              <div className="px-4 py-2 border-b border-slate-800 flex items-center justify-between bg-slate-900/40 shrink-0 gap-4">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-primary/10 rounded-lg border border-primary/20">
-                    <Cpu className="w-4 h-4 text-primary" />
+                  <div className="p-1.5 bg-primary/10 rounded-lg border border-primary/20">
+                    <Cpu className="w-3.5 h-3.5 text-primary" />
                   </div>
                   <div>
-                    <span className="text-sm font-bold text-white block leading-none">Process Manager</span>
-                    <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                    <span className="text-xs font-bold text-white block leading-none">Process Manager</span>
+                    <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">
                       {psList ? `${psList.filter(p => p.name.toLowerCase().includes(psSearchQuery.toLowerCase())).length} Active` : 'Scanning...'}
                     </span>
                   </div>
@@ -942,15 +1068,16 @@ const AgentDetailPage = () => {
                 <div className="flex items-center gap-6">
                   <button
                     onClick={() => setIsMonitoring(!isMonitoring)}
-                    className={`px-4 py-2 rounded-xl border flex items-center gap-3 transition-all ${
+                    className={`px-3 py-1.5 rounded-lg border flex items-center gap-3 transition-all ${
                       isMonitoring 
                         ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' 
                         : 'bg-slate-900 border-slate-800 text-slate-500 grayscale'
                     }`}
                   >
                     <div className={`w-2 h-2 rounded-full ${isMonitoring ? 'bg-emerald-500 animate-pulse' : 'bg-slate-700'}`} />
-                    <span className="text-[10px] font-black uppercase tracking-widest">Tactical Monitor</span>
+                    <span className="text-[9px] font-black uppercase tracking-widest">Tactical Monitor</span>
                   </button>
+
                   <div className="flex-1 max-w-sm relative">
                     <input 
                       type="text" 
@@ -1008,9 +1135,11 @@ const AgentDetailPage = () => {
                           const isSelf = Number(proc.pid) === Number(agent.pid);
                           const suspiciousBinaries = ['cmd.exe', 'powershell.exe', 'pwsh.exe', 'mimikatz.exe', 'wireshark.exe', 'nc.exe', 'nmap.exe', 'schtasks.exe', 'reg.exe', 'wmic.exe'];
                           const isSuspicious = suspiciousBinaries.some(b => proc.name.toLowerCase().includes(b));
-                          const isNew = isMonitoring && !prevPsList.some(p => p.pid === proc.pid);
+                          const isNew = highlightedPids.has(proc.pid);
                           
                           return (
+
+
                             <tr key={proc.pid} className={`hover:bg-white/5 transition-colors group ${isSelf ? 'bg-primary/5' : isSuspicious ? 'bg-red-500/5' : ''} ${isNew ? 'bg-emerald-500/5 border-l-2 border-emerald-500' : ''}`}>
                               <td className={`px-5 py-2.5 font-mono font-bold ${isSelf ? 'text-primary' : isSuspicious ? 'text-red-400' : 'text-slate-500'}`}>
                                 {proc.pid}
@@ -1062,14 +1191,14 @@ const AgentDetailPage = () => {
 
           {activeTab === 'files' && (
             <div className="card flex-1 flex flex-col overflow-hidden relative border-slate-800/50">
-              <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/40 shrink-0 gap-4">
+              <div className="px-4 py-2 border-b border-slate-800 flex items-center justify-between bg-slate-900/40 shrink-0 gap-4">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-primary/10 rounded-lg border border-primary/20">
-                    <Folder className="w-4 h-4 text-primary" />
+                  <div className="p-1.5 bg-primary/10 rounded-lg border border-primary/20">
+                    <Folder className="w-3.5 h-3.5 text-primary" />
                   </div>
                   <div>
-                    <span className="text-sm font-bold text-white block leading-none">File Explorer</span>
-                    <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                    <span className="text-xs font-bold text-white block leading-none">File Explorer</span>
+                    <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">
                       {getLatestLsResult() ? `${getLatestLsResult().files.filter(f => f.name.toLowerCase().includes(fileSearchQuery.toLowerCase())).length} Items` : 'Navigating...'}
                     </span>
                   </div>
@@ -1090,20 +1219,21 @@ const AgentDetailPage = () => {
                   <button 
                     onClick={() => handleQuickAction('ls', { path: getLatestLsResult()?.path || '.' })}
                     disabled={pendingTasks.some(t => t.task_type === 'ls')}
-                    className="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-400 text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-2"
+                    className="px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-400 text-[9px] font-bold uppercase tracking-wider transition-all flex items-center gap-2"
                   >
                     <RefreshCw className={`w-3 h-3 ${pendingTasks.some(t => t.task_type === 'ls') ? 'animate-spin' : ''}`} />
                     Refresh
                   </button>
                   <button 
                     onClick={() => {/* TODO: Implement Upload Modal */}}
-                    className="px-3 py-1.5 rounded-lg bg-primary text-white text-[10px] font-bold uppercase tracking-wider hover:bg-primary-hover transition-all flex items-center gap-2"
+                    className="px-2.5 py-1.5 rounded-lg bg-primary text-white text-[9px] font-bold uppercase tracking-wider hover:bg-primary-hover transition-all flex items-center gap-2"
                   >
                     <ArrowDown className="w-3 h-3" />
                     Upload
                   </button>
                 </div>
               </div>
+
 
               {/* Breadcrumbs Navigation */}
               <div className="px-4 py-2 bg-black/20 border-b border-slate-800/50 flex items-center gap-2 shrink-0">
@@ -1258,14 +1388,14 @@ const AgentDetailPage = () => {
 
           {activeTab === 'network' && (
             <div className="card flex-1 flex flex-col overflow-hidden relative border-slate-800/50">
-              <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/40 shrink-0 gap-4">
+              <div className="px-4 py-2 border-b border-slate-800 flex items-center justify-between bg-slate-900/40 shrink-0 gap-4">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-primary/10 rounded-lg border border-primary/20">
-                    <Wifi className="w-4 h-4 text-primary" />
+                  <div className="p-1.5 bg-primary/10 rounded-lg border border-primary/20">
+                    <Wifi className="w-3.5 h-3.5 text-primary" />
                   </div>
                   <div>
-                    <span className="text-sm font-bold text-white block leading-none">Network Auditor</span>
-                    <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                    <span className="text-xs font-bold text-white block leading-none">Network Auditor</span>
+                    <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">
                       {getLatestNetstatResult() ? `${getLatestNetstatResult().filter(c => 
                         c.local.includes(netSearchQuery) || c.remote.includes(netSearchQuery) || c.state.toLowerCase().includes(netSearchQuery.toLowerCase())
                       ).length} Connections` : 'Scanning...'}
@@ -1276,35 +1406,37 @@ const AgentDetailPage = () => {
                 <div className="flex items-center gap-6">
                   <button
                     onClick={() => setIsMonitoring(!isMonitoring)}
-                    className={`px-4 py-2 rounded-xl border flex items-center gap-3 transition-all ${
+                    className={`px-3 py-1.5 rounded-lg border flex items-center gap-3 transition-all ${
                       isMonitoring 
-                        ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' 
+                        ? 'bg-sky-500/10 border-sky-500/30 text-sky-400' 
                         : 'bg-slate-900 border-slate-800 text-slate-500 grayscale'
                     }`}
                   >
-                    <div className={`w-2 h-2 rounded-full ${isMonitoring ? 'bg-emerald-500 animate-pulse' : 'bg-slate-700'}`} />
-                    <span className="text-[10px] font-black uppercase tracking-widest">Tactical Monitor</span>
+                    <div className={`w-2 h-2 rounded-full ${isMonitoring ? 'bg-sky-400 shadow-[0_0_8px_#38bdf8]' : 'bg-slate-700'}`} />
+                    <span className="text-[9px] font-black uppercase tracking-[0.15em]">{isOnline ? 'TACTICAL MONITOR' : 'MONITOR IDLE'}</span>
                   </button>
-                  
-                  <div className="flex-1 max-w-sm relative">
-                  <input 
-                    type="text" 
-                    placeholder="Search IPs or Ports..."
-                    value={netSearchQuery}
-                    onChange={(e) => setNetSearchQuery(e.target.value)}
-                    className="w-full bg-black/40 border border-slate-800 rounded-lg pl-9 pr-4 py-1.5 text-xs text-white outline-none focus:border-primary/50 transition-all"
-                  />
-                  <RefreshCw className={`absolute left-3 top-2 w-3.5 h-3.5 text-slate-600 ${pendingTasks.some(t => t.task_type === 'netstat_json') ? 'animate-spin' : ''}`} />
-                </div>
 
-                <button 
-                  onClick={() => handleQuickAction('netstat_json', {})}
-                  disabled={pendingTasks.some(t => t.task_type === 'netstat_json')}
-                  className="px-3 py-1.5 rounded-lg bg-primary text-white text-[10px] font-bold uppercase tracking-wider hover:bg-primary-hover transition-all flex items-center gap-2"
-                >
-                  <RefreshCw className={`w-3 h-3 ${pendingTasks.some(t => t.task_type === 'netstat_json') ? 'animate-spin' : ''}`} />
-                {pendingTasks.some(t => t.task_type === 'netstat_json') ? 'Scanning' : 'Refresh'}
-              </button>
+
+                  
+                  <div className="flex-1 max-w-sm relative flex items-center gap-2">
+                    <div className="relative flex-1">
+                      <input 
+                        type="text" 
+                        placeholder="Search IPs or Ports..."
+                        value={netSearchQuery}
+                        onChange={(e) => setNetSearchQuery(e.target.value)}
+                        className="w-full bg-black/40 border border-slate-800 rounded-lg pl-9 pr-4 py-1.5 text-xs text-white outline-none focus:border-primary/50 transition-all"
+                      />
+                      <Search className="absolute left-3 top-2 w-3.5 h-3.5 text-slate-600" />
+                    </div>
+                    <button 
+                      onClick={() => handleQuickAction('netstat_json', {})}
+                      className="p-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-400 hover:text-white hover:bg-slate-700 transition-all"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${pendingTasks.some(t => t.task_type === 'netstat_json') ? 'animate-spin' : ''}`} />
+                    </button>
+                  </div>
+
             </div>
           </div>
               
@@ -1312,11 +1444,26 @@ const AgentDetailPage = () => {
                 <table className="w-full text-left text-[11px] border-collapse">
                   <thead className="bg-slate-900/80 text-slate-500 sticky top-0 z-10 backdrop-blur-md">
                     <tr>
-                      <th className="px-5 py-2.5 border-b border-slate-800 font-bold uppercase tracking-wider w-20">Proto</th>
-                      <th className="px-5 py-2.5 border-b border-slate-800 font-bold uppercase tracking-wider">Local Address</th>
-                      <th className="px-5 py-2.5 border-b border-slate-800 font-bold uppercase tracking-wider">Remote Address</th>
-                      <th className="px-5 py-2.5 border-b border-slate-800 font-bold uppercase tracking-wider text-right w-24">Status</th>
+                      <th className="px-5 py-3 border-b border-slate-800 font-bold uppercase tracking-wider w-20 text-[10px] text-slate-500">Proto</th>
+                      <th className="px-5 py-3 border-b border-slate-800 font-bold uppercase tracking-wider text-[10px] text-slate-500">
+                        <div className="flex items-center gap-2">
+                          Local Address
+                          <span className="text-primary/50 text-[9px] font-bold lowercase tracking-normal">Port: 445</span>
+                          <button className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-800 text-[8px] border border-slate-700 hover:bg-slate-700 transition-colors">
+                            PORT RANGE <ChevronDown className="w-2.5 h-2.5" />
+                          </button>
+                        </div>
+                      </th>
+                      <th className="px-5 py-3 border-b border-slate-800 font-bold uppercase tracking-wider text-[10px] text-slate-500">
+                        <div className="flex items-center gap-1">
+                          Remote Address
+                          <span className="text-slate-700 text-[9px] font-bold tracking-normal uppercase">Port: 0</span>
+                        </div>
+                      </th>
+                      <th className="px-5 py-3 border-b border-slate-800 font-bold uppercase tracking-wider text-[10px] text-slate-500">Status</th>
+                      <th className="px-5 py-3 border-b border-slate-800 font-bold uppercase tracking-wider text-[10px] text-slate-500">PID/Process</th>
                     </tr>
+
                   </thead>
                   <tbody className="divide-y divide-slate-800/50">
                     {getLatestNetstatResult() ? (
@@ -1327,40 +1474,53 @@ const AgentDetailPage = () => {
                           c.state.toLowerCase().includes(netSearchQuery.toLowerCase())
                         )
                         .map((conn, idx) => {
-                          const isNew = isMonitoring && !prevNetList.some(p => p.local === conn.local && p.remote === conn.remote && p.proto === conn.proto);
+                          const connKey = `${conn.local}-${conn.remote}`;
+                          const isNew = highlightedNetKeys.has(connKey);
+                          
                           return (
+
+
                             <tr key={idx} className={`hover:bg-white/5 transition-colors group ${isNew ? 'bg-emerald-500/5 border-l-2 border-emerald-500' : ''}`}>
-                            <td className="px-5 py-3">
-                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-black tracking-widest ${
-                                conn.proto === 'TCP' ? 'bg-primary/10 text-primary' : 'bg-purple-500/10 text-purple-400'
-                              }`}>
+                            <td className="px-5 py-4">
+                              <span className="px-2 py-0.5 rounded-md bg-sky-500/10 text-sky-400 text-[10px] font-black tracking-widest border border-sky-500/20">
                                 {conn.proto}
                               </span>
                             </td>
-                            <td className="px-5 py-3">
+                            <td className="px-5 py-4">
                               <div className="flex flex-col">
-                                <span className="text-slate-200 font-mono">{conn.local.split(':')[0]}</span>
-                                <span className="text-primary text-[10px] font-bold">Port: {conn.local.split(':')[1]}</span>
+                                <span className="text-sky-400 text-lg font-black leading-tight tracking-tight">{conn.local.split(':')[1]}</span>
+                                <span className="text-slate-500 text-[10px] font-mono">{conn.local.split(':')[0]}</span>
                               </div>
                             </td>
-                            <td className="px-5 py-3">
+                            <td className="px-5 py-4">
                               <div className="flex flex-col">
-                                <span className="text-slate-200 font-mono">{conn.remote.split(':')[0] || '*'}</span>
-                                <span className="text-slate-500 text-[10px] font-bold">Port: {conn.remote.split(':')[1] || '*'}</span>
+                                <span className="text-slate-200 font-mono text-[13px]">{conn.remote.split(':')[0] || '0.0.0.0'}</span>
+                                <span className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Port: {conn.remote.split(':')[1] || '0'}</span>
                               </div>
                             </td>
-                            <td className="px-5 py-3 text-right">
-                              <span className={`px-2 py-1 rounded-full text-[9px] font-black uppercase tracking-[0.1em] ${
-                                conn.state === 'ESTABLISHED' ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' :
-                                conn.state === 'LISTENING' ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20' :
-                                'bg-slate-800 text-slate-500 border border-slate-700'
+                            <td className="px-5 py-4">
+                              <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-[0.1em] border ${
+                                conn.state === 'ESTABLISHED' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' :
+                                conn.state === 'LISTENING' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' :
+                                'bg-slate-800 text-slate-500 border-slate-700'
                               }`}>
                                 {conn.state}
                               </span>
                             </td>
+                            <td className="px-5 py-4">
+                              <div className="flex items-center gap-2">
+                                <div className="p-1.5 rounded-lg bg-slate-800/50 border border-slate-700/50">
+                                  {conn.process && conn.process.toLowerCase().includes('system') ? <ShieldCheck className="w-3.5 h-3.5 text-slate-500" /> : 
+                                   conn.process && conn.process.toLowerCase().includes('mysql') ? <Database className="w-3.5 h-3.5 text-primary" /> :
+                                   <ActivityIcon className="w-3.5 h-3.5 text-slate-600" />}
+                                </div>
+                                <span className="text-xs font-bold text-slate-300 uppercase tracking-wide">{conn.process || 'System'}</span>
+                              </div>
+                            </td>
                           </tr>
                         );
                       })
+
                     ) : (
                       <tr>
                         <td colSpan="4" className="py-20 text-center">
