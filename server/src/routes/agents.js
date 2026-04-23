@@ -11,6 +11,8 @@ router.use((req, res, next) => {
   next();
 });
 
+const wsManager = require('../utils/wsManager');
+
 /**
  * GET /api/agents
  * List all agents with status info
@@ -18,7 +20,10 @@ router.use((req, res, next) => {
  */
 router.get('/', verifyToken, (req, res) => {
   try {
-    const agents = Agent.getAll();
+    const agents = Agent.getAll().map(agent => ({
+      ...agent,
+      is_online_ws: wsManager.isOnline(agent.id)
+    }));
     const stats = Agent.getStats();
 
     res.json({ agents, stats });
@@ -56,6 +61,9 @@ router.get('/:id', verifyToken, (req, res) => {
     }
 
     const results = Result.getByAgent(req.params.id);
+    
+    // Add WS status
+    agent.is_online_ws = wsManager.isOnline(agent.id);
 
     res.json({ agent, results });
   } catch (err) {
@@ -63,6 +71,7 @@ router.get('/:id', verifyToken, (req, res) => {
     res.status(500).json({ error: 'Failed to fetch agent' });
   }
 });
+
 
 /**
  * PATCH /api/agents/:id/metadata

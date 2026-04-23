@@ -87,8 +87,15 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
+const http = require('http');
+const wsManager = require('./utils/wsManager');
+
 // ── Start ──────────────────────────────────────────────
-app.listen(PORT, () => {
+const server = http.createServer(app);
+
+wsManager.initialize(server);
+
+server.listen(PORT, () => {
   console.log('\x1b[36m');
   console.log('  ██████╗ ██╗   ██╗████████╗███████╗ ██████╗  ██████╗ ██████╗ ███████╗');
   console.log('  ██╔══██╗╚██╗ ██╔╝╚══██╔══╝██╔════╝██╔════╝ ██╔═══██╗██╔══██╗██╔════╝');
@@ -100,6 +107,7 @@ app.listen(PORT, () => {
   console.log('  \x1b[1m\x1b[34m[SYSTEM CONFIGURATION]\x1b[0m');
   console.log(`  \x1b[32m[+]\x1b[0m Control URL:   \x1b[4mhttp://localhost:${PORT}\x1b[0m`);
   console.log(`  \x1b[32m[+]\x1b[0m API Endpoint:  \x1b[4mhttp://localhost:${PORT}/api\x1b[0m`);
-  console.log(`  \x1b[32m[+]\x1b[0m Tactical Hub:  \x1b[1mONLINE\x1b[0m`);
+  console.log(`  \x1b[32m[+]\x1b[0m Real-time Hub: \x1b[1mWS ENABLED\x1b[0m`);
   console.log('');
 });
+

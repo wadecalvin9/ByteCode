@@ -128,20 +128,29 @@ const AgentDetailPage = () => {
     const targetType = type === 'ls' ? 'ls_json' : type;
     try {
       const result = await tasksApi.create(id, targetType, payload);
+
       // Add to pending for immediate feedback
       const taskObj = result.task || result;
+      const pushed = result.pushed;
+
+      if (pushed) {
+        addToast(`Real-time dispatch: ${targetType.replace('_json', '')}`, 'success');
+      }
+
       setPendingTasks(prev => [...prev, {
         id: taskObj.id,
         task_type: targetType,
         task_payload: JSON.stringify(payload),
         status: 'pending',
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
+        pushed: pushed
       }]);
       
       // Trigger immediate refresh
       fetchDetails();
       
       return result;
+
     } catch (err) {
       alert(err.message);
     }
@@ -521,8 +530,15 @@ const AgentDetailPage = () => {
               }`}>
                 {agent.connection_status}
               </div>
+              {agent.is_online_ws && (
+                <div className="px-2 py-0.5 rounded bg-primary/10 text-primary text-[10px] font-black uppercase tracking-widest flex items-center gap-1 animate-pulse">
+                  <Zap className="w-2.5 h-2.5" />
+                  Real-time
+                </div>
+              )}
               <div className="w-1.5 h-1.5 rounded-full bg-slate-800" />
               <span className="text-[11px] font-mono text-slate-400">{agent.ip_address || '0.0.0.0'}</span>
+
             </div>
           </div>
 

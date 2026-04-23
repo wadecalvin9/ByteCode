@@ -15,6 +15,8 @@ const VALID_TASK_TYPES = [
   'download_url', 'upload_url'
 ];
 
+const wsManager = require('../utils/wsManager');
+
 /**
  * POST /api/tasks
  * Queue a new task for an agent
@@ -44,12 +46,19 @@ router.post('/', verifyToken, (req, res) => {
 
     console.log(`[TASK] Queued ${type} for agent ${agent_id.slice(0, 8)}... (${task.id.slice(0, 8)}...)`);
 
-    res.status(201).json({ task });
+    // Try to push via WebSocket for real-time execution
+    const pushed = wsManager.sendTask(agent_id, task);
+    if (pushed) {
+      console.log(`[WS] Pushed task ${task.id.slice(0, 8)} immediately to agent ${agent_id.slice(0, 8)}`);
+    }
+
+    res.status(201).json({ task, pushed });
   } catch (err) {
     console.error('[TASK] Error:', err.message);
     res.status(500).json({ error: 'Failed to create task' });
   }
 });
+
 
 /**
  * GET /api/tasks/download/:agentId/:filename

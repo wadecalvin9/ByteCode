@@ -101,9 +101,14 @@ func main() {
 			log.Printf("[INIT] Registered successfully: %s\n", newID)
 		}
 
-		// Start the beacon loop
-		err = beacon.Loop(client, cfg)
+		// Create WebSocket client for real-time tasks
+		id, _ := identity.Load(cfg.IdentityFile)
+		wsClient := comms.NewWSClient(cfg.ServerURL, id.AgentID, id.APIKey)
+
+		// Start the beacon loop (now handles both polling and WS)
+		err = beacon.Loop(client, wsClient, cfg)
 		if err != nil && strings.Contains(err.Error(), "403") {
+
 			log.Printf("[WARN] Identity rejected by server (403). Clearing identity and re-registering...\n")
 			os.Remove(cfg.IdentityFile)
 			// Small delay before retry
