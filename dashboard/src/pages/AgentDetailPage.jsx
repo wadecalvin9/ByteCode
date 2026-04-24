@@ -56,6 +56,9 @@ const AgentDetailPage = () => {
   const seenNetKeys = useRef(new Set());
   const [highlightedPids, setHighlightedPids] = useState(new Set());
   const [highlightedNetKeys, setHighlightedNetKeys] = useState(new Set());
+  const [clearedAt, setClearedAt] = useState(() => {
+    return localStorage.getItem(`bytecode_clear_${id}`) || null;
+  });
 
 
   const lastResultsLength = useRef(0);
@@ -240,6 +243,18 @@ const AgentDetailPage = () => {
 
     // Tactical Command Mapping
     switch (cmd) {
+      case 'clear': {
+        const sortedResults = [...results].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+        const allItems = [...sortedResults, ...pendingTasks].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+        const latestItem = allItems[allItems.length - 1];
+        // Set clear point to the latest item's timestamp (or now if empty)
+        const clearPoint = latestItem ? latestItem.created_at : new Date().toISOString();
+        
+        setClearedAt(clearPoint);
+        localStorage.setItem(`bytecode_clear_${id}`, clearPoint);
+        setCommand('');
+        return;
+      }
       case 'getprivs':
         taskType = 'getprivs';
         payload = {};
@@ -446,7 +461,8 @@ const AgentDetailPage = () => {
                   throw new Error(errorData.error || `Server returned ${response.status}`);
                 }
                 const blob = await response.blob();
-                const url = window.URL.createObjectURL(blob);
+                const typedBlob = new Blob([blob], { type: 'application/octet-stream' });
+                const url = window.URL.createObjectURL(typedBlob);
                 const a = document.createElement('a');
                 a.href = url;
                 a.download = filename;
@@ -989,8 +1005,15 @@ const AgentDetailPage = () => {
               <div className="flex-1 overflow-y-auto p-8 font-mono scrollbar-thin flex flex-col gap-8">
                 {(() => {
                   const sortedResults = [...results].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-                  const allItems = [...sortedResults, ...pendingTasks].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+                  let allItems = [...sortedResults, ...pendingTasks].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
                   
+                  if (clearedAt) {
+                    // Hide everything up to the recorded clear point
+                    allItems = allItems.filter(item => {
+                      return new Date(item.created_at).getTime() > new Date(clearedAt).getTime();
+                    });
+                  }
+
                   return allItems.map((res) => {
                     const isPending = !res.status || res.status === 'pending';
                     const payload = typeof res.task_payload === 'string' ? JSON.parse(res.task_payload) : (res.task_payload || {});

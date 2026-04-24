@@ -49,7 +49,8 @@ const ResultRow = ({ result }) => {
                   throw new Error(errorData.error || `Server returned ${response.status}`);
                 }
                 const blob = await response.blob();
-                const url = window.URL.createObjectURL(blob);
+                const typedBlob = new Blob([blob], { type: 'application/octet-stream' });
+                const url = window.URL.createObjectURL(typedBlob);
                 const a = document.createElement('a');
                 a.href = url;
                 a.download = filename;

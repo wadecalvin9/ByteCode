@@ -1,6 +1,6 @@
 {
   "name": "bytecode-c2",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Tactical Infrastructure Monitoring & Command and Control System",
   "main": "server/src/index.js",
   "bin": {

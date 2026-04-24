@@ -71,8 +71,8 @@ export const tasksApi = {
 };
 
 export const payloadsApi = {
-  generate: (serverUrl, showGui = false, interval = 10, jitter = 15) => apiFetch('/payloads/generate', {
+  generate: (config) => apiFetch('/payloads/generate', {
     method: 'POST',
-    body: JSON.stringify({ serverUrl, showGui, interval, jitter }),
+    body: JSON.stringify(config),
   }),
 };

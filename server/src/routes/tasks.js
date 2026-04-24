@@ -81,6 +81,11 @@ router.get('/download/:agentId/:filename', verifyToken, (req, res) => {
     const originalName = filename.split('_').slice(1).join('_') || filename;
     
     console.log(`[DOWNLOAD] Serving file: ${originalName} from ${filePath}`);
+    
+    // Explicitly set headers to avoid browser-added .download extensions
+    res.setHeader('Content-Disposition', `attachment; filename="${originalName}"`);
+    res.setHeader('Content-Type', 'application/octet-stream');
+
     res.download(filePath, originalName, (err) => {
       if (err) {
         console.error(`[DOWNLOAD] Error during transmission: ${err.message}`);
