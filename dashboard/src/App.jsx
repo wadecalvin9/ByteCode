@@ -9,6 +9,7 @@ import PayloadPage from './pages/PayloadPage';
 import TasksPage from './pages/TasksPage';
 import NetworkPage from './pages/NetworkPage';
 import DataPage from './pages/DataPage';
+import SettingsPage from './pages/SettingsPage';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -82,6 +83,14 @@ function App() {
           element={
             <ProtectedRoute>
               <DataPage />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/settings" 
+          element={
+            <ProtectedRoute>
+              <SettingsPage />
             </ProtectedRoute>
           } 
         />

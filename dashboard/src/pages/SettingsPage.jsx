@@ -1,181 +1,203 @@
 import React, { useState } from 'react';
 import { 
-  Settings as SettingsIcon, 
   Shield, 
-  Zap, 
-  Globe, 
+  Lock, 
+  User, 
   Save, 
-  RotateCcw,
-  ShieldAlert,
-  Terminal,
-  Server,
-  Fingerprint,
-  Lock,
-  Cpu,
-  Layers,
-  Database
+  AlertCircle, 
+  CheckCircle2, 
+  Loader2,
+  Database,
+  RefreshCw,
+  HardDrive
 } from 'lucide-react';
+import { authApi } from '../utils/api';
 
 const SettingsPage = () => {
-  const [activeTab, setActiveTab] = useState('malleable');
-  const [saving, setSaving] = useState(false);
-  
-  const [malleableConfig, setMalleableConfig] = useState({
-    heartbeatInterval: 30,
-    jitter: 15,
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    customHeaders: 'X-Session-ID: {{ID}}\nAccept-Language: en-US,en;q=0.9',
-    requestMethod: 'GET'
-  });
+  const [oldPassword, setOldPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState({ type: '', text: '' });
 
-  const handleSave = () => {
-    setSaving(true);
-    setTimeout(() => {
-      setSaving(false);
-    }, 1500);
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    if (newPassword !== confirmPassword) {
+      return setMessage({ type: 'error', text: 'New passwords do not match' });
+    }
+
+    setLoading(true);
+    setMessage({ type: '', text: '' });
+
+    try {
+      await authApi.changePassword(oldPassword, newPassword);
+      setMessage({ type: 'success', text: 'Password updated successfully' });
+      setOldPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (err) {
+      setMessage({ type: 'error', text: err.message || 'Failed to update password' });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const tabs = [
-    { id: 'malleable', label: 'Malleable C2', icon: Shield },
-    { id: 'infrastructure', label: 'Infrastructure', icon: Server },
-    { id: 'security', label: 'Security & Access', icon: Lock },
-    { id: 'logs', label: 'Audit Systems', icon: Database },
-  ];
-
   return (
-    <div className="flex-1 flex flex-col h-full bg-black overflow-hidden p-8">
-      <header className="mb-10 shrink-0">
-        <h1 className="text-2xl font-black text-white uppercase tracking-[0.2em]">Infrastructure Configuration</h1>
-        <p className="text-[10px] font-bold text-slate-600 uppercase tracking-widest mt-1">Configure strategic stealth profiles and global C2 behavior</p>
+    <div className="dashboard scroll-area p-8">
+      <header className="mb-8">
+        <h1 className="text-2xl font-black text-white uppercase tracking-widest flex items-center gap-3">
+          <Shield className="w-6 h-6 text-primary" />
+          Tactical Settings
+        </h1>
+        <p className="text-slate-500 text-sm mt-1">Configure infrastructure security and operator credentials</p>
       </header>
 
-      <div className="flex-1 flex gap-10 min-h-0">
-        {/* Navigation Sidebar */}
-        <aside className="w-72 shrink-0 flex flex-col gap-2">
-          {tabs.map(tab => (
-            <button 
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-4 px-6 py-4 rounded-2xl border transition-all group ${
-                activeTab === tab.id 
-                  ? 'bg-primary/10 border-primary/30 text-primary shadow-[0_0_20px_rgba(0,242,255,0.1)]' 
-                  : 'bg-surface border-border text-slate-600 hover:text-slate-400 hover:border-slate-800'
-              }`}
-            >
-              <tab.icon className={`w-5 h-5 transition-colors ${activeTab === tab.id ? 'text-primary' : 'text-slate-700 group-hover:text-slate-500'}`} />
-              <span className="text-[10px] font-black uppercase tracking-[0.2em]">{tab.label}</span>
-            </button>
-          ))}
-        </aside>
-
-        {/* Main Content Area */}
-        <main className="flex-1 overflow-y-auto scrollbar-thin pr-4 pb-20">
-          {activeTab === 'malleable' && (
-            <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
-              <div className="dash-card border-border bg-surface !p-10 space-y-10">
-                <div className="flex items-start justify-between">
-                    <div className="space-y-2">
-                        <h3 className="text-sm font-black text-white uppercase tracking-[0.3em] flex items-center gap-3">
-                            <Zap className="w-5 h-5 text-amber-500" />
-                            Temporal Signature
-                        </h3>
-                        <p className="text-[11px] text-slate-600 font-bold uppercase tracking-widest max-w-2xl leading-relaxed">Modify beacon frequency and jitter to evade time-series behavioral analysis.</p>
-                    </div>
-                    <div className="p-4 rounded-2xl bg-black border border-border">
-                        <Activity className="w-8 h-8 text-slate-800" />
-                    </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Profile & Security */}
+        <div className="space-y-6">
+          <div className="card border-slate-800 bg-slate-900/40 overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-800 bg-slate-900/60 flex items-center justify-between">
+              <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                <Lock className="w-4 h-4 text-primary" />
+                Credential Rotation
+              </h3>
+            </div>
+            
+            <form onSubmit={handleChangePassword} className="p-6 space-y-4">
+              {message.text && (
+                <div className={`p-4 rounded-lg flex items-center gap-3 ${
+                  message.type === 'success' ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border border-red-500/20 text-red-400'
+                }`}>
+                  {message.type === 'success' ? <CheckCircle2 className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
+                  <span className="text-xs font-semibold">{message.text}</span>
                 </div>
+              )}
 
-                <div className="grid grid-cols-2 gap-10">
-                  <div className="space-y-4">
-                    <label className="block">
-                      <span className="text-[9px] font-black text-slate-700 uppercase tracking-[0.3em] mb-3 block">Check-in Interval (S)</span>
-                      <input 
-                        type="number"
-                        value={malleableConfig.heartbeatInterval}
-                        onChange={e => setMalleableConfig({...malleableConfig, heartbeatInterval: e.target.value})}
-                        className="w-full bg-black border border-border rounded-xl px-6 py-4 text-white outline-none focus:border-primary/40 transition-all font-mono text-sm"
-                      />
-                    </label>
-                  </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Current Password</label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-3 w-4 h-4 text-slate-600" />
+                  <input
+                    type="password"
+                    value={oldPassword}
+                    onChange={(e) => setOldPassword(e.target.value)}
+                    className="w-full bg-black/40 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white outline-none focus:border-primary/50 transition-all"
+                    placeholder="••••••••"
+                    required
+                  />
+                </div>
+              </div>
 
-                  <div className="space-y-4">
-                    <label className="block">
-                      <span className="text-[9px] font-black text-slate-700 uppercase tracking-[0.3em] mb-3 block">Timing Variance (%)</span>
-                      <input 
-                        type="number"
-                        value={malleableConfig.jitter}
-                        onChange={e => setMalleableConfig({...malleableConfig, jitter: e.target.value})}
-                        className="w-full bg-black border border-border rounded-xl px-6 py-4 text-white outline-none focus:border-primary/40 transition-all font-mono text-sm"
-                      />
-                    </label>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">New Password</label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-3 w-4 h-4 text-slate-600" />
+                    <input
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      className="w-full bg-black/40 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white outline-none focus:border-primary/50 transition-all"
+                      placeholder="••••••••"
+                      required
+                    />
                   </div>
                 </div>
-              </div>
-
-              <div className="dash-card border-border bg-surface !p-10 space-y-10">
-                <div className="flex items-start justify-between">
-                    <div className="space-y-2">
-                        <h3 className="text-sm font-black text-white uppercase tracking-[0.3em] flex items-center gap-3">
-                            <Globe className="w-5 h-5 text-primary" />
-                            Transport Layer Masks
-                        </h3>
-                        <p className="text-[11px] text-slate-600 font-bold uppercase tracking-widest max-w-2xl leading-relaxed">Encapsulate C2 protocol within legitimate-looking HTTP traffic patterns.</p>
-                    </div>
-                </div>
-
-                <div className="space-y-8">
-                  <label className="block">
-                    <span className="text-[9px] font-black text-slate-700 uppercase tracking-[0.3em] mb-3 block">User-Agent Masquerade</span>
-                    <input 
-                      type="text"
-                      value={malleableConfig.userAgent}
-                      onChange={e => setMalleableConfig({...malleableConfig, userAgent: e.target.value})}
-                      className="w-full bg-black border border-border rounded-xl px-6 py-4 text-white outline-none focus:border-primary/40 transition-all font-mono text-xs"
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Confirm New</label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-3 w-4 h-4 text-slate-600" />
+                    <input
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className="w-full bg-black/40 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white outline-none focus:border-primary/50 transition-all"
+                      placeholder="••••••••"
+                      required
                     />
-                  </label>
-
-                  <label className="block">
-                    <span className="text-[9px] font-black text-slate-700 uppercase tracking-[0.3em] mb-3 block">Custom Transport Headers</span>
-                    <textarea 
-                      rows={5}
-                      value={malleableConfig.customHeaders}
-                      onChange={e => setMalleableConfig({...malleableConfig, customHeaders: e.target.value})}
-                      className="w-full bg-black border border-border rounded-xl px-6 py-4 text-white outline-none focus:border-primary/40 transition-all font-mono text-xs resize-none"
-                      placeholder="Header-Name: Value"
-                    />
-                  </label>
+                  </div>
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-6 pt-6">
-                <button className="flex items-center gap-3 px-8 py-4 rounded-2xl bg-black border border-border text-slate-600 hover:text-white hover:border-slate-800 transition-all text-[10px] font-black uppercase tracking-widest">
-                  <RotateCcw className="w-4 h-4" /> Reset To Default
-                </button>
-                <button 
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="flex items-center gap-3 px-10 py-4 rounded-2xl bg-primary text-black shadow-[0_10px_30px_rgba(0,242,255,0.2)] hover:scale-105 transition-all text-[10px] font-black uppercase tracking-widest disabled:opacity-20"
-                >
-                  {saving ? <RotateCcw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                  Synchronize
-                </button>
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-3 bg-primary hover:bg-primary-hover text-black font-black uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(34,211,238,0.15)] disabled:opacity-50"
+              >
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                Update Credentials
+              </button>
+            </form>
+          </div>
+
+          <div className="card border-slate-800 bg-slate-900/40 p-6 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-primary/10 rounded-2xl border border-primary/20">
+                <User className="w-6 h-6 text-primary" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-white uppercase tracking-wider">Active Operator</h4>
+                <p className="text-xs text-slate-500">Authorized management session active</p>
               </div>
             </div>
-          )}
-
-          {activeTab !== 'malleable' && (
-            <div className="h-full flex flex-col items-center justify-center opacity-20 py-32 pointer-events-none">
-              <ShieldAlert className="w-20 h-20 mb-6 text-slate-700" />
-              <p className="text-sm font-bold uppercase tracking-[0.4em] text-slate-700">Module Access Restricted</p>
+            <div className="px-3 py-1 bg-emerald-500/10 text-emerald-500 text-[10px] font-black uppercase tracking-widest border border-emerald-500/20 rounded-full">
+              Verified
             </div>
-          )}
-        </main>
+          </div>
+        </div>
+
+        {/* Persistence & DB Info */}
+        <div className="space-y-6">
+          <div className="card border-slate-800 bg-slate-900/40 p-6">
+            <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2 mb-6">
+              <Database className="w-4 h-4 text-sky-400" />
+              Infrastructure Persistence
+            </h3>
+            
+            <div className="space-y-4">
+              <div className="flex items-start gap-4 p-4 rounded-xl bg-white/5 border border-white/5">
+                <div className="p-2 bg-sky-500/10 rounded-lg">
+                  <HardDrive className="w-4 h-4 text-sky-400" />
+                </div>
+                <div>
+                  <h5 className="text-xs font-bold text-white uppercase tracking-wider">SQLite Database</h5>
+                  <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                    Data is stored in <code className="text-sky-300 font-mono">./data/bytecode.db</code>. 
+                    Running <code className="text-primary font-mono">bytecode start</code> will NOT override your data. 
+                    The system persists all agents, tasks, and results across restarts.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-4 p-4 rounded-xl bg-white/5 border border-white/5">
+                <div className="p-2 bg-emerald-500/10 rounded-lg">
+                  <RefreshCw className="w-4 h-4 text-emerald-400" />
+                </div>
+                <div>
+                  <h5 className="text-xs font-bold text-white uppercase tracking-wider">Task Redundancy</h5>
+                  <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                    Redis is used for sub-second task delivery and WebSocket state. Primary data integrity is maintained 
+                    in the persistent SQLite layer.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-8 p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
+              <div className="flex items-center gap-2 text-amber-500 mb-2">
+                <AlertCircle className="w-4 h-4" />
+                <span className="text-[10px] font-black uppercase tracking-widest">OpSec Warning</span>
+              </div>
+              <p className="text-[10px] text-slate-400 leading-relaxed italic">
+                Changing your password will NOT invalidate existing agent beacons, but it is recommended to rotate your 
+                Encryption PSK (in agent config) periodically for maximum operational security.
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
 };
-
-const Activity = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>;
 
 export default SettingsPage;

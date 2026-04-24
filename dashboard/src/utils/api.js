@@ -37,6 +37,10 @@ export const authApi = {
     body: JSON.stringify({ username, password }),
   }),
   me: () => apiFetch('/auth/me'),
+  changePassword: (oldPassword, newPassword) => apiFetch('/auth/change-password', {
+    method: 'POST',
+    body: JSON.stringify({ oldPassword, newPassword }),
+  }),
 };
 
 export const agentsApi = {

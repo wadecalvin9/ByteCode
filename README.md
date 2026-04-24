@@ -78,6 +78,20 @@ Execute `agent.exe` on the target. The agent will beacon to the configured pool 
 
 ---
 
+## 🔒 Persistence & Security
+
+### 💾 Data Integrity
+ByteCode uses a persistent **SQLite** database located at `./data/bytecode.db`. 
+*   **Restarts**: Running `npm start` or `bytecode start` will **NOT** override your data. It preserves all agents, tasks, and historical results.
+*   **Backups**: Simply copy the `bytecode.db` file to create a full backup of your C2 state.
+
+### 🔑 Credential Management
+*   **Default Credentials**: The initial setup creates a default operator (`admin` / `bytecode`).
+*   **Rotation**: Navigate to the **Settings** page in the dashboard to rotate your operator password immediately after deployment.
+*   **Infrastructure Masking**: All server-side data (including task results) is stored with integrity checks and is only accessible via authorized JWT management sessions.
+
+---
+
 ## 🗺️ Roadmap
 
 - [x] **Phase 1**: AES Encryption, Jitter, Dockerization, Redis.
