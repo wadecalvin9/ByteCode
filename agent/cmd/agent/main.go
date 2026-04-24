@@ -28,10 +28,10 @@ func main() {
 		fmt.Println("  [DEBUG MODE ENABLED]")
 		fmt.Println("  Console window is visible and verbose logging is active.")
 		fmt.Println("")
-		go ShowMessage("ByteCode Agent", "Agent started in Testing Mode.\n\nServer: "+cfg.ServerURL)
+		go ShowMessage("ByteCode Agent", "Agent started in Testing Mode.\n\nServer: "+cfg.GetServerURL())
 	}
 
-	log.Printf("[INIT] Server: %s\n", cfg.ServerURL)
+	log.Printf("[INIT] Server: %s\n", cfg.GetServerURL())
 	if cfg.IsDebug {
 		log.Printf("[DEBUG] Identity file path: %s\n", cfg.IdentityFile)
 	}

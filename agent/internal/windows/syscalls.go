@@ -29,7 +29,8 @@ func GetSyscallID(functionName string) (uint32, error) {
 	for i := 0; i < 20; i++ {
 		// Look for 'mov eax, SSN' opcode (0xB8)
 		if data[i] == 0xB8 {
-			ssn := *(*uint32)(unsafe.Pointer(uintptr(ptr) + uintptr(i+1)))
+			ssnPtr := unsafe.Add(unsafe.Pointer(ptr), i+1)
+			ssn := *(*uint32)(ssnPtr)
 			return ssn, nil
 		}
 		

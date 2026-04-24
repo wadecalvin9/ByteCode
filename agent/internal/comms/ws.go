@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"net/url"
+	"strings"
 	"time"
 
 	"bytecode-agent/internal/config"
@@ -38,26 +38,15 @@ func NewWSClient(cfg *config.Config, agentID, apiKey string) *WSClient {
 
 // Connect establishes the WebSocket connection
 func (w *WSClient) Connect() error {
-	u, err := url.Parse(w.Config.ServerURL)
-	if err != nil {
-		return err
-	}
+	// Determine WS URL from active ServerURL
+	serverURL := w.Config.GetServerURL()
+	wsURLStr := strings.Replace(serverURL, "http", "ws", 1) + "/ws/agent"
+	
+	fullURL := fmt.Sprintf("%s?id=%s&key=%s", wsURLStr, w.AgentID, w.APIKey)
 
-	scheme := "ws"
-	if u.Scheme == "https" {
-		scheme = "wss"
-	}
+	log.Printf("[WS] Connecting to %s\n", wsURLStr)
 
-	wsURL := url.URL{
-		Scheme:   scheme,
-		Host:     u.Host,
-		Path:     "/ws/agent",
-		RawQuery: fmt.Sprintf("id=%s&key=%s", w.AgentID, w.APIKey),
-	}
-
-	log.Printf("[WS] Connecting to %s\n", wsURL.String())
-
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL.String(), nil)
+	conn, _, err := websocket.DefaultDialer.Dial(fullURL, nil)
 	if err != nil {
 		return err
 	}

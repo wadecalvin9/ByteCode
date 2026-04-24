@@ -88,7 +88,7 @@ func (c *Client) Register(req *RegisterRequest) (*RegisterResponse, error) {
 		requestBody = body
 	}
 
-	httpReq, err := http.NewRequest("POST", c.Config.ServerURL+"/api/register", bytes.NewBuffer(requestBody))
+	httpReq, err := http.NewRequest("POST", c.Config.GetServerURL()+"/api/register", bytes.NewBuffer(requestBody))
 	if err != nil {
 		return nil, fmt.Errorf("request error: %w", err)
 	}
@@ -149,7 +149,7 @@ func (c *Client) Beacon() (*BeaconResponse, error) {
 		requestBody = body
 	}
 
-	httpReq, err := http.NewRequest("POST", c.Config.ServerURL+"/api/beacon", bytes.NewBuffer(requestBody))
+	httpReq, err := http.NewRequest("POST", c.Config.GetServerURL()+"/api/beacon", bytes.NewBuffer(requestBody))
 	if err != nil {
 		return nil, fmt.Errorf("request error: %w", err)
 	}
@@ -214,7 +214,7 @@ func (c *Client) SendResult(result *ResultRequest) error {
 		requestBody = body
 	}
 
-	httpReq, err := http.NewRequest("POST", c.Config.ServerURL+"/api/result", bytes.NewBuffer(requestBody))
+	httpReq, err := http.NewRequest("POST", c.Config.GetServerURL()+"/api/result", bytes.NewBuffer(requestBody))
 	if err != nil {
 		return fmt.Errorf("request error: %w", err)
 	}

