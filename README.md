@@ -14,19 +14,19 @@ ByteCode is a high-performance C2 framework engineered for advanced red-teaming,
 
 ## Technical Specifications
 
-### Tactical Evasion & Stealth
+### <img src="assets/evasion.svg" width="24" height="24" valign="middle"> Tactical Evasion & Stealth
 *   **Dynamic Syscall Invocation**: Implements Hell's Gate/Halo's Gate techniques to bypass EDR/AV hooks by dynamically extracting SSNs and executing syscalls via assembly stubs.
 *   **Cryptographic Transport Layer**: All C2 traffic is secured using AES-256-GCM with a build-time injected Pre-Shared Key (PSK).
 *   **Memory Obfuscation**: Agent configuration and state are masked using XOR-based encryption during sleep cycles to minimize memory forensics signatures.
 *   **Ghost Injection**: Supports stealthy process injection using indirect syscalls for memory allocation and thread creation.
 
-### Operational Primitives
+### <img src="assets/primitives.svg" width="24" height="24" valign="middle"> Operational Primitives
 *   **In-Memory Artifact Execution**: Reflective COFF loader for executing Beacon Object Files (BOFs) directly in memory without disk artifacts.
 *   **Privilege & Identity Management**: Native support for token impersonation, privilege auditing, and credential vault discovery.
 *   **Artifact Factory**: Integrated build pipeline for generating hardened, customized agent binaries with build-time configuration injection.
 *   **Data Explorer**: Centralized repository for exfiltrated assets, featuring integrity-validated download protocols.
 
-### Infrastructure Resilience
+### <img src="assets/resilience.svg" width="24" height="24" valign="middle"> Infrastructure Resilience
 *   **C2 Pool Failover**: Supports multi-host infrastructure pools with automatic agent failover and rotation.
 *   **Real-time Telemetry**: WebSocket-driven dashboard providing sub-second latency for command execution and infrastructure status monitoring.
 *   **Persistent Intelligence**: SQLite-backed logging ensuring operational history and agent states are preserved across server reboots.
@@ -74,7 +74,7 @@ Deploy the generated binary on the target environment. The agent will automatica
 
 ---
 
-## Security & Access Control
+## <img src="assets/security.svg" width="28" height="28" valign="middle"> Security & Access Control
 
 ### Operational Integrity
 *   **Default Credentials**: The initial system deployment utilizes `admin` / `bytecode`. 
