@@ -1,105 +1,96 @@
-# 🏴‍☠️ ByteCode C2
-**Professional-Grade Tactical Command & Control Infrastructure**
+# ByteCode C2
+### Strategic Command & Control Infrastructure for Advanced Security Operations
 
-ByteCode is a premium C2 framework engineered for high-fidelity post-exploitation, advanced evasion, and infrastructure resilience. 
+![Banner](assets/bytecode_c2_banner.png)
 
-![Version](https://img.shields.io/badge/Version-1.5.0--Stable-blueviolet?style=for-the-badge)
-![Encryption](https://img.shields.io/badge/Encryption-AES--256--GCM-success?style=for-the-badge)
-![Evasion](https://img.shields.io/badge/Evasion-Hell's_Gate-orange?style=for-the-badge)
+[![Release](https://img.shields.io/badge/Release-v1.5.0--STABLE-blue.svg?style=flat-square)](#)
+[![License](https://img.shields.io/badge/License-Proprietary-red.svg?style=flat-square)](#)
+[![Architecture](https://img.shields.io/badge/Arch-Windows_/_Linux-lightgrey.svg?style=flat-square)](#)
+[![Encryption](https://img.shields.io/badge/Encryption-AES--256--GCM-success.svg?style=flat-square)](#)
 
----
-
-## ⚡ Core Tactical Features
-
-### 🛡️ Advanced Evasion & OpSec
-*   **Indirect Syscalls (Hell's Gate)**: Bypasses EDR/AV hooks by dynamically extracting SSNs and executing syscalls directly via assembly stubs.
-*   **Memory Masking**: XOR-based encryption of agent configuration and memory cloaking during sleep periods.
-*   **AES-256-GCM Transport**: Cryptographically secured C2 channel using a 32-byte Pre-Shared Key (PSK).
-*   **Panic Recovery**: Hardened agent executor with runtime recovery to prevent disconnections during failed tactical operations.
-
-### 🛰️ Post-Exploitation Primitives
-*   **In-Memory BOF Loader**: Reflective COFF loader capable of executing Cobalt Strike compatible Beacon Object Files (BOFs) in-process without touching disk.
-*   **Identity Management**: Native token impersonation (`impersonate`) and privilege auditing (`getprivs`) for rapid lateral movement.
-*   **Ghost Injection**: Process injection using stealthy memory allocation and thread creation via indirect syscalls.
-*   **Tactical Console**: Integrated dashboard terminal that maps console commands to native agent primitives.
-
-### 🌐 Infrastructure Resilience
-*   **Multi-Host Failover**: Agents support a server pool for automatic rotation and failover if the primary C2 is neutralized.
-*   **Infrastructure Monitor**: Real-time dashboard view of server health and agent connectivity across the failover pool.
+ByteCode is a high-performance C2 framework engineered for advanced red-teaming, post-exploitation, and infrastructure resilience. It provides operators with a sophisticated suite of tactical primitives designed for stealthy operation in highly-monitored environments.
 
 ---
 
-## 🏗️ Infrastructure Setup
+## Technical Specifications
 
-### 📦 Redis Dependencies
-ByteCode utilizes Redis for high-speed task caching and real-time WebSocket state management.
+### Tactical Evasion & Stealth
+*   **Dynamic Syscall Invocation**: Implements Hell's Gate/Halo's Gate techniques to bypass EDR/AV hooks by dynamically extracting SSNs and executing syscalls via assembly stubs.
+*   **Cryptographic Transport Layer**: All C2 traffic is secured using AES-256-GCM with a build-time injected Pre-Shared Key (PSK).
+*   **Memory Obfuscation**: Agent configuration and state are masked using XOR-based encryption during sleep cycles to minimize memory forensics signatures.
+*   **Ghost Injection**: Supports stealthy process injection using indirect syscalls for memory allocation and thread creation.
 
-#### Option A: Docker (Recommended)
-The easiest way to setup the infrastructure is via Docker Compose:
+### Operational Primitives
+*   **In-Memory Artifact Execution**: Reflective COFF loader for executing Beacon Object Files (BOFs) directly in memory without disk artifacts.
+*   **Privilege & Identity Management**: Native support for token impersonation, privilege auditing, and credential vault discovery.
+*   **Artifact Factory**: Integrated build pipeline for generating hardened, customized agent binaries with build-time configuration injection.
+*   **Data Explorer**: Centralized repository for exfiltrated assets, featuring integrity-validated download protocols.
+
+### Infrastructure Resilience
+*   **C2 Pool Failover**: Supports multi-host infrastructure pools with automatic agent failover and rotation.
+*   **Real-time Telemetry**: WebSocket-driven dashboard providing sub-second latency for command execution and infrastructure status monitoring.
+*   **Persistent Intelligence**: SQLite-backed logging ensuring operational history and agent states are preserved across server reboots.
+
+---
+
+## Infrastructure Deployment
+
+### Redis Dependency
+ByteCode utilizes Redis for high-speed task scheduling and real-time state synchronization.
+
+#### Deployment via Docker (Recommended)
 ```bash
 docker-compose up -d redis
 ```
 
-#### Option B: Manual Installation (Ubuntu/Debian)
+#### Manual Installation (Linux)
 ```bash
-sudo apt update
-sudo apt install redis-server -y
-sudo systemctl enable redis-server
-sudo systemctl start redis-server
+sudo apt update && sudo apt install redis-server -y
+sudo systemctl enable --now redis-server
 ```
-
-#### Option C: Windows
-1. Download the latest `.msi` from [Redis for Windows](https://github.com/microsoftarchive/redis/releases).
-2. Install and ensure the service is running on `localhost:6379`.
 
 ---
 
-## 🚀 Quick Start
+## Operational Workflow
 
-### 1. Launch the Hub
+### 1. Hub Initialization
+Initialize the C2 server and operator dashboard:
 ```bash
-# Install dependencies
+# Provision dependencies
 npm install
 
-# Start the C2 system (Auto-detects Redis)
+# Initialize the ByteCode environment
 npm start
 ```
 
-### 2. Build the Agent
-Generate a hardened agent via the **Payload Builder** in the dashboard, or build manually:
-```bash
-cd agent
-# Build for Windows x64 with Evasion
-go build -ldflags="-s -w -H=windowsgui" -o agent.exe ./cmd/agent
-```
+### 2. Artifact Generation
+Generate a tactical agent via the **Artifact Factory** in the dashboard.
+*   **Agent Identity**: Customize binary naming (e.g., `svchost.exe`) for environmental blending.
+*   **C2 Pool**: Configure primary and failover infrastructure nodes.
+*   **Jitter/Interval**: Define beaconing patterns to bypass heuristic analysis.
 
-### 3. Deploy
-Execute `agent.exe` on the target. The agent will beacon to the configured pool and appear in the **Infrastructure Monitor**.
+### 3. Tactical Deployment
+Deploy the generated binary on the target environment. The agent will automatically initialize the beaconing protocol and appear in the **Infrastructure Monitor**.
 
 ---
 
-## 🔒 Persistence & Security
+## Security & Access Control
 
-### 💾 Data Integrity
-ByteCode uses a persistent **SQLite** database located at `./data/bytecode.db`. 
-*   **Restarts**: Running `npm start` or `bytecode start` will **NOT** override your data. It preserves all agents, tasks, and historical results.
-*   **Backups**: Simply copy the `bytecode.db` file to create a full backup of your C2 state.
-
-### 🔑 Credential Management
-*   **Default Credentials**: The initial setup creates a default operator (`admin` / `bytecode`).
-*   **Rotation**: Navigate to the **Settings** page in the dashboard to rotate your operator password immediately after deployment.
-*   **Infrastructure Masking**: All server-side data (including task results) is stored with integrity checks and is only accessible via authorized JWT management sessions.
+### Operational Integrity
+*   **Default Credentials**: The initial system deployment utilizes `admin` / `bytecode`. 
+*   **Credential Rotation**: Operators must rotate passwords via the **Settings** panel immediately upon deployment.
+*   **Persistence**: Operational data is stored in `./data/bytecode.db`. This database preserves all historical exfiltration and tasking; it is **never** overwritten during system restarts.
 
 ---
 
-## 🗺️ Roadmap
+## Developmental Roadmap
 
-- [x] **Phase 1**: AES Encryption, Jitter, Dockerization, Redis.
-- [x] **Phase 2**: Hell's Gate, Memory Masking, Ghost Injection.
-- [x] **Phase 3**: In-memory BOF Loader, Token Impersonation, Multi-host Failover.
-- [ ] **Phase 4**: SOCKS5 Proxying, UDRL Integration, Kernel-Mode Persistence.
+- [x] **Milestone 1**: AES-GCM Transport, Multi-host Failover, Redis Integration.
+- [x] **Milestone 2**: Hell's Gate Syscall Implementation, Memory Masking.
+- [x] **Milestone 3**: Reflective BOF Loader, Artifact Factory, Terminal Clear Primitives.
+- [ ] **Milestone 4**: SOCKS5 Tunneling, UDRL Integration, Kernel-Mode Persistence.
 
 ---
 
-## ⚠️ Disclaimer
-*This tool is intended for authorized security auditing and educational purposes only. Unauthorized use on systems you do not own is strictly prohibited.*
+## Legal Disclaimer
+*This framework is designed for authorized professional security auditing and educational purposes only. Unauthorized use on systems without explicit prior consent is strictly prohibited and may be illegal.*
