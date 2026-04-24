@@ -57,6 +57,7 @@ func main() {
 				Arch:       sysInfo.Arch,
 				PID:        sysInfo.PID,
 				InternalIP: sysInfo.InternalIP,
+				ServerPool: cfg.ServerURLs,
 			}
 
 			var regResp *comms.RegisterResponse

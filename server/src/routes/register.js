@@ -9,13 +9,13 @@ const Agent = require('../models/agent');
  */
 router.post('/', (req, res) => {
   try {
-    const { hostname, os, arch, pid, internal_ip } = req.body;
+    const { hostname, os, arch, pid, internal_ip, server_pool } = req.body;
 
     if (!hostname || !os) {
       return res.status(400).json({ error: 'hostname and os are required' });
     }
 
-    const agent = Agent.register({ hostname, os, arch, pid, internal_ip });
+    const agent = Agent.register({ hostname, os, arch, pid, internal_ip, server_pool });
 
     console.log(`[REGISTER] New agent: ${hostname} (${os}/${arch}) -> ${agent.id}`);
 

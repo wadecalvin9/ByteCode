@@ -24,8 +24,9 @@ type RegisterRequest struct {
 	Hostname   string `json:"hostname"`
 	OS         string `json:"os"`
 	Arch       string `json:"arch"`
-	PID        int    `json:"pid"`
-	InternalIP string `json:"internal_ip"`
+	PID        int      `json:"pid"`
+	InternalIP string   `json:"internal_ip"`
+	ServerPool []string `json:"server_pool"`
 }
 
 // RegisterResponse is returned from /api/register

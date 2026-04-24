@@ -5,14 +5,14 @@ class Agent {
   /**
    * Register a new agent
    */
-  static register({ hostname, os, arch, pid, internal_ip }) {
+  static register({ hostname, os, arch, pid, internal_ip, server_pool }) {
     const id = generateId();
     const api_key = generateApiKey();
 
     db.prepare(`
-      INSERT INTO agents (id, hostname, os, arch, pid, api_key, internal_ip)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(id, hostname, os, arch, pid, api_key, internal_ip || null);
+      INSERT INTO agents (id, hostname, os, arch, pid, api_key, internal_ip, server_pool)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, hostname, os, arch, pid, api_key, internal_ip || null, JSON.stringify(server_pool || []));
 
     return { id, api_key };
   }

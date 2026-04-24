@@ -8,6 +8,7 @@ import "syscall"
 var (
 	Kernel32 = syscall.NewLazyDLL("kernel32.dll")
 	Ntdll    = syscall.NewLazyDLL("ntdll.dll")
+	Advapi32 = syscall.NewLazyDLL("advapi32.dll")
 
 	// Shared Procedures
 	ProcOpenProcess  = Kernel32.NewProc("OpenProcess")

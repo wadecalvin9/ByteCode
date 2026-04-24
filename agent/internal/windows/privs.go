@@ -10,8 +10,8 @@ import (
 )
 
 var (
-	procGetTokenInformation = Kernel32.NewProc("GetTokenInformation")
-	procLookupPrivilegeName = Kernel32.NewProc("LookupPrivilegeNameW")
+	procGetTokenInformation = Advapi32.NewProc("GetTokenInformation")
+	procLookupPrivilegeName = Advapi32.NewProc("LookupPrivilegeNameW")
 )
 
 const (

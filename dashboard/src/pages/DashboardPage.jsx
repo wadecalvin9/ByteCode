@@ -41,44 +41,78 @@ const StatCard = ({ title, value, icon: Icon, color, accent }) => {
   );
 };
 
-/* ───────────────── Mini Bar Chart (simulated fleet activity) ───────────────── */
-const FleetActivityChart = ({ agents }) => {
-  const hours = useMemo(() => {
-    // Deterministic simulation based on agents.length to satisfy purity rules
-    const seed = agents.length + 1;
-    return Array.from({ length: 24 }, (_, i) => {
-      const pseudoRandom = ((i * 1234567) ^ (seed * 7654321)) % 100;
-      const active = Math.floor((pseudoRandom / 100) * (agents.length + 1));
-      return { hour: i, active, total: agents.length };
+/* ───────────────── Infrastructure Resilience Monitor ───────────────── */
+const InfrastructureMonitor = ({ agents }) => {
+  const hostStats = useMemo(() => {
+    const stats = {};
+    agents.forEach(agent => {
+      let pool = [];
+      try {
+        pool = typeof agent.server_pool === 'string' ? JSON.parse(agent.server_pool) : (agent.server_pool || []);
+      } catch {
+        pool = [];
+      }
+      
+      // If pool is empty, assume it's just the current server
+      if (pool.length === 0) pool = [window.location.origin];
+
+      pool.forEach(host => {
+        if (!stats[host]) {
+          stats[host] = { host, agents: 0, online: 0 };
+        }
+        stats[host].agents++;
+        if (agent.connection_status === 'online') {
+          stats[host].online++;
+        }
+      });
     });
-  }, [agents.length]);
-  
-  const max = useMemo(() => 
-    Math.max(...hours.map(h => h.total), 1),
-    [hours]
-  );
+    return Object.values(stats).sort((a, b) => b.agents - a.agents);
+  }, [agents]);
 
   return (
     <div className="dash-card">
       <div className="dash-card__header">
-        <h4 className="dash-card__title">Fleet Activity</h4>
-        <div className="dash-card__legend">
-          <span className="legend-dot legend-dot--blue" /> Online
-          <span className="legend-dot legend-dot--slate" /> Offline
+        <h4 className="dash-card__title">Infrastructure Resilience</h4>
+        <div className="flex items-center gap-2">
+          <Shield className="w-3.5 h-3.5 text-primary" />
+          <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Failover Active</span>
         </div>
       </div>
-      <div className="chart-area">
-        {hours.map((h, i) => (
-          <div key={i} className="chart-bar-group">
-            <div className="chart-bar-bg" style={{ height: `${(h.total / max) * 100}%` }}>
-              <div 
-                className="chart-bar-fill" 
-                style={{ height: `${(h.active / (h.total || 1)) * 100}%` }} 
-              />
-            </div>
-            {i % 4 === 0 && <span className="chart-label">{String(i).padStart(2, '0')}</span>}
+      
+      <div className="space-y-4 max-h-[300px] overflow-y-auto scrollbar-thin pr-2">
+        {hostStats.length === 0 ? (
+          <div className="py-8 text-center">
+            <p className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">No infrastructure data</p>
           </div>
-        ))}
+        ) : (
+          hostStats.map((stat, i) => (
+            <div key={i} className="p-3 rounded-xl bg-white/5 border border-white/5 hover:border-primary/20 transition-all group">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <div className={`w-1.5 h-1.5 rounded-full ${stat.online > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-slate-700'}`} />
+                  <span className="text-[11px] font-mono text-slate-300 truncate max-w-[180px]">{stat.host}</span>
+                </div>
+                <span className="text-[10px] font-black text-primary uppercase">{stat.online} / {stat.agents} Online</span>
+              </div>
+              <div className="h-1.5 w-full bg-slate-900 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-primary transition-all duration-1000" 
+                  style={{ width: `${(stat.online / (stat.agents || 1)) * 100}%` }}
+                />
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+      
+      <div className="mt-4 pt-4 border-t border-slate-800/50 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Server className="w-3.5 h-3.5 text-slate-500" />
+          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{hostStats.length} Target Hosts</span>
+        </div>
+        <div className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider">
+          {hostStats.filter(s => s.online > 0).length} REACHABLE
+        </div>
       </div>
     </div>
   );
@@ -324,7 +358,7 @@ const DashboardPage = () => {
 
       {/* ── Charts Row ── */}
       <section className="dash-charts">
-        <FleetActivityChart agents={agents} />
+        <InfrastructureMonitor agents={agents} />
         <OSDistribution agents={agents} />
       </section>
 

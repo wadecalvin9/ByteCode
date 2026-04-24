@@ -10,10 +10,10 @@ import (
 )
 
 var (
-	procOpenProcessToken      = Kernel32.NewProc("OpenProcessToken")
-	procDuplicateTokenEx      = Kernel32.NewProc("DuplicateTokenEx")
-	procImpersonateLoggedOnUser = Kernel32.NewProc("ImpersonateLoggedOnUser")
-	procRevertToSelf          = Kernel32.NewProc("RevertToSelf")
+	procOpenProcessToken      = Advapi32.NewProc("OpenProcessToken")
+	procDuplicateTokenEx      = Advapi32.NewProc("DuplicateTokenEx")
+	procImpersonateLoggedOnUser = Advapi32.NewProc("ImpersonateLoggedOnUser")
+	procRevertToSelf          = Advapi32.NewProc("RevertToSelf")
 )
 
 const (

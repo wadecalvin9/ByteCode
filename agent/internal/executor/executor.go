@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"runtime"
@@ -21,6 +22,12 @@ const MaxOutputSize = 1024 * 1024 // 1MB
 
 // Execute handles task execution based on type
 func Execute(task *comms.TaskPayload, apiKey string) *comms.ResultRequest {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("[PANIC] Recovered from task crash: %v\n", r)
+		}
+	}()
+
 	result := &comms.ResultRequest{
 		TaskID: task.ID,
 		Status: "success",

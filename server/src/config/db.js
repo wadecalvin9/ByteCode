@@ -32,7 +32,8 @@ function initializeDatabase() {
       first_seen TEXT DEFAULT (datetime('now')),
       status TEXT DEFAULT 'active',
       beacon_interval INTEGER DEFAULT 30,
-      metadata TEXT DEFAULT '{}'
+      metadata TEXT DEFAULT '{}',
+      server_pool TEXT DEFAULT '[]'
     );
 
     CREATE TABLE IF NOT EXISTS tasks (
@@ -70,9 +71,9 @@ function initializeDatabase() {
 
   // Auto-migrate: add columns that may be missing from older databases
   const agentCols = db.prepare('PRAGMA table_info(agents)').all().map(c => c.name);
-  if (!agentCols.includes('external_ip')) {
-    db.prepare('ALTER TABLE agents ADD COLUMN external_ip TEXT').run();
-    console.log('[DB] Migration: added external_ip column to agents');
+  if (!agentCols.includes('server_pool')) {
+    db.prepare('ALTER TABLE agents ADD COLUMN server_pool TEXT DEFAULT "[]"').run();
+    console.log('[DB] Migration: added server_pool column to agents');
   }
 
   // Seed default admin if no operators exist
