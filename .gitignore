@@ -12,6 +12,10 @@ Thumbs.db
 # Server specific
 server/data/*.db
 server/payloads/
+server/exfiltrated_files/
+
+# Data directory
+data/
 
 # Agent specific
 agent/*.exe
