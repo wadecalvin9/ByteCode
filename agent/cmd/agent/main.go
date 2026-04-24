@@ -4,29 +4,14 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"runtime"
 	"strings"
-	"syscall"
 	"time"
 
 	"bytecode-agent/internal/beacon"
 	"bytecode-agent/internal/comms"
 	"bytecode-agent/internal/config"
 	"bytecode-agent/internal/identity"
-	"unsafe"
 )
-
-func ShowMessage(title, text string) {
-	if runtime.GOOS != "windows" {
-		return
-	}
-	user32 := syscall.NewLazyDLL("user32.dll")
-	messageBox := user32.NewProc("MessageBoxW")
-	messageBox.Call(0,
-		uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(text))),
-		uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(title))),
-		0)
-}
 
 func main() {
 	// Banner
@@ -52,7 +37,7 @@ func main() {
 	}
 
 	// Create HTTP client
-	client := comms.NewClient(cfg.ServerURL)
+	client := comms.NewClient(cfg)
 
 	for {
 		// Try to load existing identity
@@ -103,7 +88,7 @@ func main() {
 
 		// Create WebSocket client for real-time tasks
 		id, _ := identity.Load(cfg.IdentityFile)
-		wsClient := comms.NewWSClient(cfg.ServerURL, id.AgentID, id.APIKey)
+		wsClient := comms.NewWSClient(cfg, id.AgentID, id.APIKey)
 
 		// Start the beacon loop (now handles both polling and WS)
 		err = beacon.Loop(client, wsClient, cfg)

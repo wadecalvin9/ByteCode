@@ -49,7 +49,7 @@ router.post('/generate', verifyToken, async (req, res) => {
     ldflags += ` -H=windowsgui`;
   }
 
-  const command = `go build -ldflags="${ldflags}" -o "${outputPath}" cmd/agent/main.go`;
+  const command = `go build -ldflags="${ldflags}" -o "${outputPath}" ./cmd/agent`;
 
   console.log(`[PAYLOAD] Generating: ${outputName} for ${serverUrl} (GUI: ${showGui})`);
 

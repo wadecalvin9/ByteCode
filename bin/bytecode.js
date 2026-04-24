@@ -63,6 +63,8 @@ program
     await glitchIntro();
 
     console.log('  \x1b[1m\x1b[32m[+]\x1b[0m Initializing Tactical C2 Infrastructure...');
+    console.log('  \x1b[36m[+]\x1b[0m Traffic Encryption:  AES-256-GCM ACTIVE');
+    console.log('  \x1b[36m[+]\x1b[0m Operational Masking: ENABLED');
 
     const serverPath = path.join(__dirname, '../server/src/index.js');
     const env = { ...process.env, PORT: options.port };

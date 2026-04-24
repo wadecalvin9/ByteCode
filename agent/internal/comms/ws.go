@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"time"
 
-
+	"bytecode-agent/internal/config"
 	"github.com/gorilla/websocket"
 )
 
@@ -19,7 +19,7 @@ type WSMessage struct {
 
 // WSClient handles the WebSocket connection to the server
 type WSClient struct {
-	ServerURL string
+	Config    *config.Config
 	AgentID   string
 	APIKey    string
 	Conn      *websocket.Conn
@@ -27,9 +27,9 @@ type WSClient struct {
 }
 
 // NewWSClient creates a new WebSocket client
-func NewWSClient(serverURL, agentID, apiKey string) *WSClient {
+func NewWSClient(cfg *config.Config, agentID, apiKey string) *WSClient {
 	return &WSClient{
-		ServerURL: serverURL,
+		Config:    cfg,
 		AgentID:   agentID,
 		APIKey:    apiKey,
 		TaskChan:  make(chan *TaskPayload, 10),
@@ -38,7 +38,7 @@ func NewWSClient(serverURL, agentID, apiKey string) *WSClient {
 
 // Connect establishes the WebSocket connection
 func (w *WSClient) Connect() error {
-	u, err := url.Parse(w.ServerURL)
+	u, err := url.Parse(w.Config.ServerURL)
 	if err != nil {
 		return err
 	}
