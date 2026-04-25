@@ -63,6 +63,8 @@ npm install -g bytecode-c2
 bytecode-c2 start
 ```
 
+![Command Center](assets/Commandcenter.png)
+
 #### NPX (One-time Run)
 Execute the system without global installation:
 
@@ -105,14 +107,23 @@ The React-based operator dashboard must be compiled before the server can serve 
 npm run build
 ```
 
-### 3. System Initialization
+![Dashboard](assets/Dashboard.png)
 
-Launch the C2 orchestration hub:
+---
 
+## Deployment via Docker (Recommended)
+
+For production environments, Docker provides a containerized, self-contained deployment of the server, dashboard, and Redis dependency.
+
+### 1. Fast Deployment
 ```bash
-# Start the server and CLI interface
-npm start
+# Build and launch the full stack
+docker-compose up -d
 ```
+
+### 2. Service Management
+*   **Logs**: `docker-compose logs -f`
+*   **Stop**: `docker-compose down`
 
 ---
 
