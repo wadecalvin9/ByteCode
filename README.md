@@ -37,35 +37,89 @@ ByteCode is a high-performance C2 framework engineered for advanced red-teaming,
 
 ---
 
-## Infrastructure Deployment
+## Getting Started
 
-### Redis Dependency
-ByteCode utilizes Redis for high-speed task scheduling and real-time state synchronization.
+### Prerequisites
 
-#### Deployment via Docker (Recommended)
+Ensure your development environment meets the following specifications:
+
+*   **Node.js**: `v20.x` or higher
+*   **Go**: `v1.22.x` or higher (Required for Artifact Factory)
+*   **Redis**: `v6.x` or higher
+    *   *Docker (Recommended)*: `docker-compose up -d redis`
+    *   *Manual*: `sudo apt install redis-server -y`
+*   **Git**: For version control
+
+### 1. Installation
+
+#### Global Installation (Recommended for Operators)
+You can install the ByteCode CLI globally to access the command from anywhere:
+
 ```bash
-docker-compose up -d redis
+# Install the tactical CLI globally
+npm install -g bytecode-c2
+
+# Launch the system
+bytecode-c2 start
 ```
 
-#### Manual Installation (Linux)
+#### NPX (One-time Run)
+Execute the system without global installation:
+
 ```bash
-sudo apt update && sudo apt install redis-server -y
-sudo systemctl enable --now redis-server
+npx bytecode-c2 start
+```
+
+#### Local Development Setup
+If you are modifying the source code, use the local setup:
+
+```bash
+# Install all dependencies recursively
+npm run install-all
+
+# Compile the dashboard
+npm run build
+
+# Run via local script
+npm start
+```
+
+### 2. Command Reference
+
+The `bytecode` CLI provides several commands for infrastructure management:
+
+| Command | Description |
+| :--- | :--- |
+| `bytecode-c2 start` | Launches the C2 server and operator dashboard |
+| `bytecode-c2 --version` | Displays the current system version |
+| `bytecode-c2 --help` | Shows available command primitives |
+
+---
+
+### 3. Dashboard Build
+
+The React-based operator dashboard must be compiled before the server can serve it:
+
+```bash
+# Compile the Vite/React dashboard
+npm run build
+```
+
+### 3. System Initialization
+
+Launch the C2 orchestration hub:
+
+```bash
+# Start the server and CLI interface
+npm start
 ```
 
 ---
 
 ## Operational Workflow
 
-### 1. Hub Initialization
-Initialize the C2 server and operator dashboard:
-```bash
-# Provision dependencies
-npm install
-
-# Initialize the ByteCode environment
-npm start
-```
+### 1. Infrastructure Verification
+Verify that the Redis service is active and the database is initialized. The system will automatically perform a health check on startup.
 
 ### 2. Artifact Generation
 Generate a tactical agent via the **Artifact Factory** in the dashboard.

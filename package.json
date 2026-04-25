@@ -4,7 +4,7 @@
   "description": "Tactical Infrastructure Monitoring & Command and Control System",
   "main": "server/src/index.js",
   "bin": {
-    "bytecode": "bin/bytecode.js"
+    "bytecode-c2": "bin/bytecode.js"
   },
   "scripts": {
     "start": "node bin/bytecode.js start",

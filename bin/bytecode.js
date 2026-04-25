@@ -8,7 +8,7 @@ const pkg = require('../package.json');
 const program = new Command();
 
 program
-  .name('bytecode')
+  .name('bytecode-c2')
   .description('ByteCode Tactical C2 CLI')
   .version(pkg.version);
 
