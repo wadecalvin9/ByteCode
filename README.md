@@ -7,6 +7,10 @@
 [![License](https://img.shields.io/badge/License-Proprietary-red.svg?style=flat-square)](#)
 [![Architecture](https://img.shields.io/badge/Arch-Windows_/_Linux-lightgrey.svg?style=flat-square)](#)
 [![Encryption](https://img.shields.io/badge/Encryption-AES--256--GCM-success.svg?style=flat-square)](#)
+[![License: GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+[![Go Report Card](https://goreportcard.com/badge/github.com/wadecalvin9/bytecode)](https://goreportcard.com/report/github.com/wadecalvin9/bytecode)
+[![GitHub release](https://img.shields.io/github/v/release/wadecalvin9/bytecode)](https://github.com/wadecalvin9/bytecode/releases)
+[![GitHub stars](https://img.shields.io/github/stars/wadecalvin9/bytecode)](https://github.com/wadecalvin9/bytecode/stargazers)
 
 ByteCode is a high-performance C2 framework engineered for advanced red-teaming, post-exploitation, and infrastructure resilience. It provides operators with a sophisticated suite of tactical primitives designed for stealthy operation in highly-monitored environments.
 
@@ -91,6 +95,5 @@ Deploy the generated binary on the target environment. The agent will automatica
 - [ ] **Milestone 4**: SOCKS5 Tunneling, UDRL Integration, Kernel-Mode Persistence.
 
 ---
-
 ## Legal Disclaimer
 *This framework is designed for authorized professional security auditing and educational purposes only. Unauthorized use on systems without explicit prior consent is strictly prohibited and may be illegal.*
