@@ -67,7 +67,39 @@ program
     console.log('  \x1b[36m[+]\x1b[0m Operational Masking: ENABLED');
 
     const serverPath = path.join(__dirname, '../server/src/index.js');
+    const distPath = path.join(__dirname, '../dashboard/dist');
     const env = { ...process.env, PORT: options.port };
+
+    // Check if dashboard needs building
+    const fs = require('fs');
+    if (!fs.existsSync(path.join(distPath, 'index.html'))) {
+      const dashboardDir = path.join(__dirname, '../dashboard');
+      const vitePath = path.join(dashboardDir, 'node_modules', 'vite', 'bin', 'vite.js');
+
+      if (fs.existsSync(vitePath)) {
+        // Source install — dashboard source + deps available, build with vite directly
+        console.log('  \x1b[33m[!]\x1b[0m Dashboard build missing. Initiating build sequence...');
+        try {
+          const buildProcess = spawn(process.execPath, [vitePath, 'build'], {
+            cwd: dashboardDir,
+            stdio: 'inherit'
+          });
+
+          await new Promise((resolve, reject) => {
+            buildProcess.on('close', (code) => {
+              if (code === 0) resolve();
+              else reject(new Error(`Build failed with code ${code}`));
+            });
+          });
+          console.log('  \x1b[32m[+]\x1b[0m Dashboard build completed successfully.\n');
+        } catch (err) {
+          console.log('  \x1b[31m[!]\x1b[0m Dashboard build failed. Server will run in API-only mode.');
+        }
+      } else {
+        console.log('  \x1b[31m[!]\x1b[0m Dashboard assets not found. Server will run in API-only mode.');
+        console.log('  \x1b[90m    Run from project source with dashboard dependencies installed to enable the UI.\x1b[0m');
+      }
+    }
 
     const server = spawn('node', [serverPath], {
       stdio: 'inherit',

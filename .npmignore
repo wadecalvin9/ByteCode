@@ -1,20 +1,10 @@
-# Database and temporary files
+# Override .gitignore to allow dashboard/dist in the package
+node_modules/
 data/
-server/data/
 *.db
 *.db-wal
 *.db-shm
-
-# Build artifacts
-node_modules/
-dashboard/node_modules/
-server/node_modules/
-
-# Logs
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# OS files
-.DS_Store
-Thumbs.db
+server/data/
+server/payloads/
+server/exfiltrated_files/
+exfiltrated_files/

@@ -1,14 +1,25 @@
 {
   "name": "bytecode-c2",
-  "version": "1.0.5",
+  "version": "1.1.0",
   "description": "Tactical Infrastructure Monitoring & Command and Control System",
   "main": "server/src/index.js",
   "bin": {
     "bytecode-c2": "bin/bytecode.js"
   },
+  "files": [
+    "bin/",
+    "server/src/",
+    "server/package.json",
+    "dashboard/dist/",
+    "agent/cmd/",
+    "agent/internal/",
+    "agent/go.mod",
+    "agent/go.sum"
+  ],
   "scripts": {
     "start": "node bin/bytecode.js start",
     "build": "cd dashboard && npm run build",
+    "prepublishOnly": "cd dashboard && npm install && npm run build",
     "install-all": "npm install && cd server && npm install && cd ../dashboard && npm install"
   },
   "keywords": [
@@ -20,6 +31,16 @@
   "author": "Antigravity",
   "license": "MIT",
   "dependencies": {
-    "commander": "^11.1.0"
+    "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^11.7.0",
+    "commander": "^11.1.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "jsonwebtoken": "^9.0.2",
+    "raw-body": "^3.0.0",
+    "redis": "^4.7.0",
+    "uuid": "^14.0.0",
+    "ws": "^8.20.0"
   }
 }
