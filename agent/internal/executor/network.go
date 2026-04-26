@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"bytecode-agent/internal/windows"
 )
 
 // getNetworkInfo returns network interface and connection info
@@ -37,6 +39,7 @@ func getNetworkInfo(_ interface{}) (string, error) {
 	var cmd *exec.Cmd
 	if runtime.GOOS == "windows" {
 		cmd = exec.Command("netstat", "-ano")
+		windows.HideConsole(cmd)
 	} else {
 		cmd = exec.Command("netstat", "-tulpn")
 	}
@@ -50,6 +53,7 @@ func getNetworkInfo(_ interface{}) (string, error) {
 	// ARP table
 	sb.WriteString("\n=== ARP TABLE ===\n\n")
 	arpCmd := exec.Command("arp", "-a")
+	windows.HideConsole(arpCmd)
 	arpOut, err := arpCmd.CombinedOutput()
 	if err == nil {
 		sb.WriteString(string(arpOut))
@@ -195,7 +199,9 @@ func getNetworkInfoJSON(_ interface{}) (string, error) {
 
 	if runtime.GOOS == "windows" {
 		// Parse netstat -ano
-		out, err := exec.Command("netstat", "-ano").Output()
+		cmd := exec.Command("netstat", "-ano")
+		windows.HideConsole(cmd)
+		out, err := cmd.Output()
 		if err == nil {
 			lines := strings.Split(string(out), "\n")
 			for _, line := range lines {

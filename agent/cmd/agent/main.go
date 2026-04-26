@@ -24,6 +24,11 @@ func main() {
 	// Load configuration
 	cfg := config.Load()
 
+	// Hide console window in non-debug mode
+	if !cfg.IsDebug {
+		HideConsoleWindow()
+	}
+
 	if cfg.IsDebug {
 		fmt.Println("  [DEBUG MODE ENABLED]")
 		fmt.Println("  Console window is visible and verbose logging is active.")

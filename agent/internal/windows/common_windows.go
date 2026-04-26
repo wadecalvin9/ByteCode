@@ -3,7 +3,10 @@
 
 package windows
 
-import "syscall"
+import (
+	"os/exec"
+	"syscall"
+)
 
 var (
 	Kernel32 = syscall.NewLazyDLL("kernel32.dll")
@@ -14,6 +17,14 @@ var (
 	ProcOpenProcess  = Kernel32.NewProc("OpenProcess")
 	ProcCloseHandle  = Kernel32.NewProc("CloseHandle")
 )
+
+// HideConsole prevents a console window from popping up when running a command
+func HideConsole(cmd *exec.Cmd) {
+	if cmd.SysProcAttr == nil {
+		cmd.SysProcAttr = &syscall.SysProcAttr{}
+	}
+	cmd.SysProcAttr.HideWindow = true
+}
 
 const (
 	// Memory Protections

