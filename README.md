@@ -14,6 +14,12 @@
 
 ByteCode is a high-performance C2 framework engineered for advanced red-teaming, post-exploitation, and infrastructure resilience. It provides operators with a sophisticated suite of tactical primitives designed for stealthy operation in highly-monitored environments.
 
+## Platform Demo
+
+<div align="center">
+  <video src="assets/Demo.mp4" width="100%" controls></video>
+</div>
+
 ---
 
 ## Technical Specifications
