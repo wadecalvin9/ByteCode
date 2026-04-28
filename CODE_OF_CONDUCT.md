@@ -1,6 +1,5 @@
 # Contributor Covenant Code of Conduct
 
-[Your existing pledge and standards sections - keep as-is]
 
 ## Attribution
 
