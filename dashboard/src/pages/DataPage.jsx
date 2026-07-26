@@ -25,7 +25,8 @@ const ResultRow = ({ result }) => {
 
     if (output.startsWith('FILE_EXFILTRATED:')) {
       const fullPath = output.replace('FILE_EXFILTRATED:', '');
-      const filename = fullPath.split(/[\\/]/).pop().split('_').slice(1).join('_');
+      const fileBasename = fullPath.split(/[\\/]/).pop();
+      const filename = fileBasename.split('_').slice(1).join('_') || fileBasename;
       
       return (
         <div className="p-6 m-4 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-between group shadow-xl">
@@ -42,7 +43,6 @@ const ResultRow = ({ result }) => {
           <button 
             onClick={async () => {
               try {
-                const fileBasename = fullPath.split(/[\\/]/).pop();
                 const response = await tasksApi.download(result.agent_id, fileBasename);
                 if (!response.ok) {
                   const errorData = await response.json().catch(() => ({}));
@@ -62,6 +62,47 @@ const ResultRow = ({ result }) => {
                 console.error('Download error:', err);
                 alert(`Download failed: ${err.message}`);
               }
+            }}
+            className="px-8 py-3 rounded-xl bg-primary text-white text-[11px] font-black uppercase tracking-[0.2em] hover:bg-primary-hover transition-all shadow-lg shadow-primary/30 flex items-center gap-3"
+          >
+            <Download className="w-4 h-4" /> Download File
+          </button>
+        </div>
+      );
+    }
+
+    const isBinaryOrDownload = result.task_type === 'download' || 
+      (output && (output.startsWith('PK\x03\x04') || output.startsWith('PK\x05\x06') || output.startsWith('%PDF') || output.startsWith('\x7fELF') || output.startsWith('MZ')));
+
+    if (isBinaryOrDownload) {
+      let payloadObj = {};
+      try { payloadObj = typeof result.task_payload === 'string' ? JSON.parse(result.task_payload) : (result.task_payload || {}); } catch(e) {}
+      const targetPath = payloadObj.path || 'exfiltrated_file';
+      const filename = targetPath.split(/[\\/]/).pop() || 'file.bin';
+
+      return (
+        <div className="p-6 m-4 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-between group shadow-xl">
+          <div className="flex items-center gap-5">
+            <div className="p-4 bg-primary/20 rounded-2xl text-primary group-hover:rotate-12 transition-transform">
+              <Download className="w-8 h-8" />
+            </div>
+            <div>
+              <div className="text-xs font-black text-primary uppercase tracking-wider mb-1 opacity-70">File Resource</div>
+              <div className="text-base font-bold text-white">{filename}</div>
+              <div className="text-[10px] text-slate-500 font-mono mt-1">{targetPath}</div>
+            </div>
+          </div>
+          <button 
+            onClick={() => {
+              const blob = new Blob([output], { type: 'application/octet-stream' });
+              const url = window.URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = filename;
+              document.body.appendChild(a);
+              a.click();
+              window.URL.revokeObjectURL(url);
+              document.body.removeChild(a);
             }}
             className="px-8 py-3 rounded-xl bg-primary text-white text-[11px] font-black uppercase tracking-[0.2em] hover:bg-primary-hover transition-all shadow-lg shadow-primary/30 flex items-center gap-3"
           >

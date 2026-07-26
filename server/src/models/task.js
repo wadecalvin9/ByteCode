@@ -18,6 +18,13 @@ class Task {
   }
 
   /**
+   * Get a single task by ID
+   */
+  static getById(id) {
+    return db.prepare('SELECT * FROM tasks WHERE id = ?').get(id);
+  }
+
+  /**
    * Get the next pending task for an agent (FIFO)
    */
   static getNextForAgent(agentId) {

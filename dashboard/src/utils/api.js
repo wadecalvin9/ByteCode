@@ -11,24 +11,37 @@ export const apiFetch = async (endpoint, options = {}) => {
     ...options.headers,
   };
 
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), options.timeout || 25000);
 
-  if (response.status === 401 || response.status === 403) {
-    if (!endpoint.includes('/auth/login')) {
-      localStorage.removeItem('bytecode_token');
-      window.location.href = '/login';
+  try {
+    const response = await fetch(`${API_BASE}${endpoint}`, {
+      ...options,
+      headers,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (response.status === 401 || response.status === 403) {
+      if (!endpoint.includes('/auth/login')) {
+        localStorage.removeItem('bytecode_token');
+        window.location.href = '/login';
+      }
     }
-  }
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error || 'API Request Failed');
-  }
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || 'API Request Failed');
+    }
 
-  return response.json();
+    return await response.json();
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError') {
+      throw new Error('API Request Timed Out');
+    }
+    throw err;
+  }
 };
 
 export const authApi = {
@@ -74,5 +87,6 @@ export const payloadsApi = {
   generate: (config) => apiFetch('/payloads/generate', {
     method: 'POST',
     body: JSON.stringify(config),
+    timeout: 120000,
   }),
 };

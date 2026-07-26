@@ -1,18 +1,18 @@
 import React from 'react';
-import { 
-  LogOut, 
-  LayoutDashboard, 
-  Settings, 
-  Users, 
-  Cpu, 
-  Terminal, 
-  Globe, 
+import {
+  LayoutDashboard,
+  Settings,
+  Users,
+  Cpu,
+  Terminal,
+  Globe,
   Database,
-  Layers
+  LogOut,
+  Layers,
 } from 'lucide-react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 
-const NavIcon = ({ icon, label, path, isActive, disabled }) => {
+const NavItem = ({ icon, label, path, isActive, disabled }) => {
   const Icon = icon;
   return (
     <Link
@@ -20,15 +20,20 @@ const NavIcon = ({ icon, label, path, isActive, disabled }) => {
       className={`sidebar-icon-btn ${isActive ? 'active' : ''} ${disabled ? 'disabled' : ''}`}
       title={label}
     >
-      <Icon className="w-[18px] h-[18px]" />
-      {isActive && <div className="sidebar-active-dot" />}
+      <Icon size={15} strokeWidth={isActive ? 2.2 : 1.8} />
+      <span className="sidebar-icon-label">{label}</span>
     </Link>
   );
 };
 
 const Sidebar = ({ children }) => {
-  const navigate = useNavigate();
-  const location = useLocation();
+  const navigate  = useNavigate();
+  const location  = useLocation();
+
+  const operatorRaw = localStorage.getItem('bytecode_user');
+  const operator = operatorRaw ? JSON.parse(operatorRaw) : null;
+  const username  = operator?.username || 'operator';
+  const initials  = username.slice(0, 2).toUpperCase();
 
   const handleLogout = () => {
     localStorage.removeItem('bytecode_token');
@@ -37,56 +42,74 @@ const Sidebar = ({ children }) => {
   };
 
   const topNav = [
-    { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
-    { icon: Users, label: 'Endpoints', path: '/agents' },
-    { icon: Cpu, label: 'Payload Builder', path: '/payloads' },
-    { icon: Terminal, label: 'Task Manager', path: '/tasks' },
-    { icon: Globe, label: 'Network Topology', path: '/network' },
-    { icon: Database, label: 'Data Explorer', path: '/data' },
-  ];
-
-  const bottomNav = [
-    { icon: Settings, label: 'Settings', path: '/settings' },
+    { icon: LayoutDashboard, label: 'Overview',        path: '/'        },
+    { icon: Users,           label: 'Endpoints',       path: '/agents'  },
+    { icon: Cpu,             label: 'Payload Builder', path: '/payloads'},
+    { icon: Terminal,        label: 'Task Manager',    path: '/tasks'   },
+    { icon: Globe,           label: 'Network Map',     path: '/network' },
+    { icon: Database,        label: 'Data Explorer',   path: '/data'    },
   ];
 
   return (
     <div className="app-shell">
-      {/* Slim Icon Sidebar */}
+      {/* Sidebar */}
       <aside className="icon-sidebar">
-        <div className="sidebar-logo">
+        {/* Logo */}
+        <div className="sidebar-header">
           <div className="sidebar-logo-icon">
-            <Layers className="w-5 h-5 text-white" />
+            <Layers size={14} color="#fff" strokeWidth={2.2} />
+          </div>
+          <div>
+            <div className="sidebar-logo-text">ByteCode</div>
+            <div className="sidebar-logo-sub">C2 Platform</div>
           </div>
         </div>
 
-        <nav className="sidebar-nav">
-          {topNav.map((item) => (
-            <NavIcon
-              key={item.path}
-              {...item}
-              isActive={
-                item.path === '/' 
-                  ? location.pathname === '/' 
-                  : location.pathname.startsWith(item.path)
-              }
-            />
-          ))}
-        </nav>
+        {/* Navigation */}
+        <div className="sidebar-section">
+          <div className="sidebar-section-label">Navigation</div>
+          <nav className="sidebar-nav">
+            {topNav.map((item) => (
+              <NavItem
+                key={item.path}
+                {...item}
+                isActive={
+                  item.path === '/'
+                    ? location.pathname === '/'
+                    : location.pathname.startsWith(item.path)
+                }
+              />
+            ))}
+          </nav>
 
-        <div className="sidebar-bottom">
-          {bottomNav.map((item) => (
-            <NavIcon
-              key={item.path}
-              {...item}
-              isActive={location.pathname === item.path}
+          <div className="sidebar-section-label" style={{ marginTop: 20 }}>System</div>
+          <nav className="sidebar-nav">
+            <NavItem
+              icon={Settings}
+              label="Settings"
+              path="/settings"
+              isActive={location.pathname === '/settings'}
             />
-          ))}
+          </nav>
+        </div>
+
+        {/* Operator Footer */}
+        <div className="sidebar-bottom">
+          <div className="sidebar-operator">
+            <div className="sidebar-operator-avatar">{initials}</div>
+            <div style={{ flex: 1, overflow: 'hidden' }}>
+              <div className="sidebar-operator-name">{username}</div>
+              <div className="sidebar-operator-role">Operator</div>
+            </div>
+          </div>
           <button
             onClick={handleLogout}
             className="sidebar-icon-btn logout"
             title="Logout"
+            style={{ marginTop: 2 }}
           >
-            <LogOut className="w-[18px] h-[18px]" />
+            <LogOut size={14} strokeWidth={1.8} />
+            <span className="sidebar-icon-label">Sign out</span>
           </button>
         </div>
       </aside>

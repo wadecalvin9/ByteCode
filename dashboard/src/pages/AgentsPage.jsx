@@ -1,237 +1,187 @@
 import React, { useEffect, useState } from 'react';
-import { 
-  Users, 
-  Search, 
-  Trash2, 
-  ChevronRight, 
-  Activity, 
-  Monitor, 
-  Cpu, 
-  ShieldCheck,
-  Loader2,
-  RefreshCw,
-  Skull,
-  MapPin
-} from 'lucide-react';
+import { Search, Trash2, ChevronRight, Monitor, Cpu, Loader2, RefreshCw, MapPin } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { agentsApi } from '../utils/api';
 import { formatDistanceToNow } from 'date-fns';
 
 const AgentsPage = () => {
-  const [agents, setAgents] = useState([]);
-  const [stats, setStats] = useState({ total: 0, active: 0, inactive: 0 });
-  const [loading, setLoading] = useState(true);
+  const [agents,      setAgents]      = useState([]);
+  const [stats,       setStats]       = useState({ total: 0, active: 0, inactive: 0 });
+  const [loading,     setLoading]     = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [purging, setPurging] = useState(null);
+  const [purging,     setPurging]     = useState(null);
 
   const fetchAgents = async () => {
     try {
       const data = await agentsApi.list();
       setAgents(data.agents);
       setStats(data.stats);
-    } catch (err) {
-      console.error('Failed to fetch agents:', err);
-    } finally {
-      setLoading(false);
-    }
+    } catch (err) { console.error(err); }
+    finally { setLoading(false); }
   };
 
   useEffect(() => {
-    const init = async () => {
-      await fetchAgents();
-    };
-    init();
+    fetchAgents();
     const interval = setInterval(fetchAgents, 5000);
     return () => clearInterval(interval);
   }, []);
 
-  const handlePurge = async (id, hostname) => {
-    if (!window.confirm(`Permanently remove ${hostname} from the database? This will also delete all associated exfiltration data.`)) return;
-    
+  const handlePurge = async (e, id, hostname) => {
+    e.preventDefault();
+    if (!window.confirm(`Remove ${hostname} from the database?`)) return;
     setPurging(id);
     try {
       await agentsApi.purge(id);
       setAgents(prev => prev.filter(a => a.id !== id));
-      // Refresh stats
       const data = await agentsApi.list();
       setStats(data.stats);
-    } catch (err) {
-      alert('Failed to purge agent: ' + err.message);
-    } finally {
-      setPurging(null);
-    }
+    } catch (err) { alert('Failed: ' + err.message); }
+    finally { setPurging(null); }
   };
 
-  const filteredAgents = agents.filter(a => 
+  const getGeo = (meta) => {
+    try { return JSON.parse(meta || '{}').geo; } catch { return null; }
+  };
+
+  const filtered = agents.filter(a =>
     a.hostname.toLowerCase().includes(searchQuery.toLowerCase()) ||
     a.ip_address?.includes(searchQuery) ||
     a.id.includes(searchQuery)
   );
 
-  const getGeoFromMetadata = (metadataStr) => {
-    try {
-      const metadata = JSON.parse(metadataStr || '{}');
-      return metadata.geo;
-    } catch {
-      return null;
-    }
-  };
-
   if (loading && agents.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-slate-950">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="w-10 h-10 text-primary animate-spin" />
-          <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">Synchronizing Fleet Assets...</p>
-        </div>
+      <div className="dash-loading" style={{ flex: 1 }}>
+        <Loader2 size={24} style={{ color: 'var(--color-primary)', animation: 'spin 1s linear infinite' }} />
+        <p>Loading endpoints...</p>
       </div>
     );
   }
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-background overflow-hidden">
-      {/* Header Area */}
-      <div className="px-8 py-8 border-b border-border bg-background shrink-0">
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-4">
-            <div className="p-2.5 bg-primary/10 rounded-xl border border-primary/20 text-primary">
-              <Users className="w-6 h-6" />
-            </div>
-            <div>
-              <h1 className="text-lg font-bold text-white tracking-tight leading-none">Infrastructure Endpoints</h1>
-              <p className="text-[10px] text-slate-500 font-medium uppercase tracking-widest mt-1.5">Managed device inventory & connectivity status</p>
-            </div>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {/* Page header */}
+      <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid var(--color-border)', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
+          <div>
+            <h1 className="page-title">Endpoints</h1>
+            <p className="page-subtitle">Managed device inventory and connectivity status</p>
           </div>
-          
-          <div className="flex items-center gap-10">
-            <div className="text-right">
-              <div className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Fleet Connectivity Status</div>
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-lg font-bold text-white leading-none">{stats.active}</span>
-                  <span className="text-[9px] font-bold text-success uppercase leading-none">Online</span>
-                </div>
-                <div className="h-3 w-px bg-border" />
-                <div className="flex items-center gap-1.5">
-                  <span className="text-lg font-bold text-slate-400 leading-none">{stats.total}</span>
-                  <span className="text-[9px] font-bold text-slate-600 uppercase leading-none">Total</span>
-                </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--color-text-dim)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 4 }}>Fleet status</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-success)', letterSpacing: '-0.03em' }}>{stats.active}</span>
+                <span style={{ fontSize: 10, color: 'var(--color-text-muted)', fontWeight: 500 }}>online</span>
+                <span style={{ width: 1, height: 14, background: 'var(--color-border)' }} />
+                <span style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-text-header)', letterSpacing: '-0.03em' }}>{stats.total}</span>
+                <span style={{ fontSize: 10, color: 'var(--color-text-muted)', fontWeight: 500 }}>total</span>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="flex-1 relative group">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-600 group-focus-within:text-primary transition-colors" />
-            <input 
-              type="text" 
-              placeholder="Filter fleet by hostname, IP, or session ID..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-black/40 border border-border rounded-lg pl-10 pr-4 py-2.5 text-[13px] text-white outline-none focus:border-primary/50 transition-all placeholder:text-slate-700 shadow-inner"
+        <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ flex: 1, position: 'relative' }}>
+            <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-dim)', pointerEvents: 'none' }} />
+            <input type="text" placeholder="Filter by hostname, IP, or ID..."
+              value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+              style={{ width: '100%', background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)', borderRadius: 8, padding: '7px 12px 7px 30px', fontSize: 12, color: 'var(--color-text)', outline: 'none', fontFamily: 'var(--font-sans)' }}
+              onFocus={e => e.target.style.borderColor = 'rgba(59,130,246,0.5)'}
+              onBlur={e => e.target.style.borderColor = 'var(--color-border)'}
             />
           </div>
-          <button 
-            onClick={fetchAgents}
-            className="p-2.5 bg-surface border border-border rounded-lg text-slate-500 hover:text-white transition-all shadow-sm"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          <button onClick={fetchAgents} title="Refresh"
+            style={{ padding: '7px 10px', background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)', borderRadius: 8, color: 'var(--color-text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+            <RefreshCw size={14} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
           </button>
         </div>
       </div>
 
-    <div className="flex-1 overflow-y-auto scrollbar-thin px-8 py-6">
-        <div className="card border-border bg-transparent">
-          <table className="w-full text-left border-collapse">
+      {/* Table */}
+      <div style={{ flex: 1, overflow: 'auto', padding: '16px 24px 24px' }}>
+        <div className="card">
+          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
-              <tr className="border-b border-border bg-surface/20">
-                <th className="px-6 py-3.5 text-[9px] font-bold text-slate-500 uppercase tracking-widest">Endpoint Hostname</th>
-                <th className="px-6 py-3.5 text-[9px] font-bold text-slate-500 uppercase tracking-widest">System Profile</th>
-                <th className="px-6 py-3.5 text-[9px] font-bold text-slate-500 uppercase tracking-widest">Network Identity</th>
-                <th className="px-6 py-3.5 text-[9px] font-bold text-slate-500 uppercase tracking-widest">Status</th>
-                <th className="px-6 py-3.5 text-[9px] font-bold text-slate-500 uppercase tracking-widest text-right">Operations</th>
+              <tr style={{ borderBottom: '1px solid var(--color-border-muted)' }}>
+                {['Hostname', 'System', 'Network', 'Status', 'Last seen', ''].map(h => (
+                  <th key={h} style={{ padding: '10px 16px', fontSize: 10, fontWeight: 600, color: 'var(--color-text-dim)', textTransform: 'uppercase', letterSpacing: '0.07em', whiteSpace: 'nowrap' }}>{h}</th>
+                ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-border">
-              {filteredAgents.length > 0 ? (
-                filteredAgents.map((agent) => (
-                  <tr key={agent.id} className="group hover:bg-white/[0.01] transition-colors">
-                    <td className="px-6 py-4">
-                      <Link to={`/agents/${agent.id}`} className="flex items-center gap-3 group/item">
-                        <div className={`w-2 h-2 rounded-full ${agent.connection_status === 'online' ? 'bg-success shadow-[0_0_10px_var(--color-success)]' : 'bg-slate-800'}`} />
+            <tbody>
+              {filtered.length > 0 ? filtered.map(agent => {
+                const geo = getGeo(agent.metadata);
+                const isOnline = agent.connection_status === 'online';
+                return (
+                  <tr key={agent.id} style={{ borderBottom: '1px solid var(--color-border-muted)', transition: 'background 0.1s', cursor: 'pointer' }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.02)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <td style={{ padding: '12px 16px' }}>
+                      <Link to={`/agents/${agent.id}`} style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
+                        <div style={{ width: 6, height: 6, borderRadius: '50%', background: isOnline ? 'var(--color-success)' : 'var(--color-text-dim)', boxShadow: isOnline ? '0 0 6px var(--color-success)' : 'none', flexShrink: 0 }} />
                         <div>
-                          <div className="text-[13px] font-bold text-white group-hover/item:text-primary transition-colors leading-none">{agent.hostname}</div>
-                          <div className="text-[10px] font-mono text-slate-500 mt-1.5">{agent.id.substring(0, 12)}...</div>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text)', lineHeight: 1.2 }}>{agent.hostname}</div>
+                          <div style={{ fontSize: 10, color: 'var(--color-text-dim)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>{agent.id.substring(0, 12)}...</div>
                         </div>
                       </Link>
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="flex flex-col gap-1.5">
-                        <div className="flex items-center gap-2">
-                          <Monitor className="w-3 h-3 text-slate-600" />
-                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{agent.os}</span>
+                    <td style={{ padding: '12px 16px' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                          <Monitor size={11} style={{ color: 'var(--color-text-dim)' }} />
+                          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{agent.os}</span>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <Cpu className="w-3 h-3 text-slate-600" />
-                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{agent.arch} • PID {agent.pid}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                          <Cpu size={11} style={{ color: 'var(--color-text-dim)' }} />
+                          <span style={{ fontSize: 10, color: 'var(--color-text-dim)' }}>{agent.arch} · PID {agent.pid}</span>
                         </div>
-                        {getGeoFromMetadata(agent.metadata) && (
-                          <div className="flex items-center gap-2">
-                            <MapPin className="w-3 h-3 text-primary/40" />
-                            <span className="text-[9px] font-bold text-primary/60 uppercase tracking-wider">
-                              {getGeoFromMetadata(agent.metadata).city}, {getGeoFromMetadata(agent.metadata).country}
-                            </span>
+                        {geo && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                            <MapPin size={11} style={{ color: 'var(--color-text-dim)' }} />
+                            <span style={{ fontSize: 10, color: 'var(--color-text-dim)' }}>{geo.city}, {geo.country}</span>
                           </div>
                         )}
                       </div>
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="flex flex-col gap-1">
-                        <div className="text-[11px] font-mono text-slate-300">{agent.ip_address || '0.0.0.0'}</div>
-                        <div className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">Internal: {agent.internal_ip || 'unknown'}</div>
+                    <td style={{ padding: '12px 16px' }}>
+                      <div style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--color-text-muted)' }}>{agent.ip_address || '—'}</div>
+                      <div style={{ fontSize: 10, color: 'var(--color-text-dim)', marginTop: 2 }}>int: {agent.internal_ip || '—'}</div>
+                    </td>
+                    <td style={{ padding: '12px 16px' }}>
+                      <span className={`status-pill ${isOnline ? 'online' : 'offline'}`}>{isOnline ? 'Online' : 'Offline'}</span>
+                      <div style={{ fontSize: 10, color: 'var(--color-text-dim)', marginTop: 4 }}>
+                        {formatDistanceToNow(new Date(agent.last_seen), { addSuffix: true })}
                       </div>
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="flex flex-col gap-1">
-                        <span className={`text-[9px] font-bold uppercase tracking-widest ${agent.connection_status === 'online' ? 'text-success' : 'text-slate-600'}`}>
-                          {agent.connection_status === 'online' ? 'Active' : 'Offline'}
-                        </span>
-                        <span className="text-[10px] text-slate-500 font-medium">
-                          {formatDistanceToNow(new Date(agent.last_seen), { addSuffix: true })}
-                        </span>
-                      </div>
+                    <td style={{ padding: '12px 16px', color: 'var(--color-text-muted)', fontSize: 11 }}>
+                      {formatDistanceToNow(new Date(agent.last_seen), { addSuffix: true })}
                     </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        {agent.connection_status === 'offline' && (
-                          <button 
-                            onClick={() => handlePurge(agent.id, agent.hostname)}
-                            disabled={purging === agent.id}
-                            className="p-2 rounded-lg bg-red-500/5 border border-red-500/10 text-red-500/30 hover:text-red-500 hover:bg-red-500/10 transition-all"
-                            title="Remove Infrastructure Record"
-                          >
-                            {purging === agent.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                    <td style={{ padding: '12px 16px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
+                        {!isOnline && (
+                          <button onClick={e => handlePurge(e, agent.id, agent.hostname)} disabled={purging === agent.id}
+                            title="Remove from database"
+                            style={{ padding: '5px 8px', borderRadius: 6, background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.15)', color: 'var(--color-error)', cursor: 'pointer', display: 'flex', alignItems: 'center', opacity: purging === agent.id ? 0.5 : 1 }}>
+                            {purging === agent.id ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <Trash2 size={13} />}
                           </button>
                         )}
-                        <Link 
-                          to={`/agents/${agent.id}`}
-                          className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-surface border border-border text-slate-400 hover:text-white hover:border-primary/50 transition-all shadow-sm"
+                        <Link to={`/agents/${agent.id}`}
+                          style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px', borderRadius: 6, background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)', color: 'var(--color-text-muted)', textDecoration: 'none', fontSize: 11, fontWeight: 600, transition: 'all 0.15s' }}
+                          onMouseEnter={e => { e.currentTarget.style.color = 'var(--color-text-header)'; e.currentTarget.style.borderColor = 'rgba(59,130,246,0.4)'; }}
+                          onMouseLeave={e => { e.currentTarget.style.color = 'var(--color-text-muted)'; e.currentTarget.style.borderColor = 'var(--color-border)'; }}
                         >
-                          <span className="text-[10px] font-bold uppercase tracking-wider">Manage</span>
-                          <ChevronRight className="w-3 h-3" />
+                          Manage <ChevronRight size={12} />
                         </Link>
                       </div>
                     </td>
                   </tr>
-                ))
-              ) : (
+                );
+              }) : (
                 <tr>
-                  <td colSpan="5" className="py-24 text-center">
-                    <div className="flex flex-col items-center gap-3">
-                      <Activity className="w-8 h-8 text-slate-800 animate-pulse" />
-                      <p className="text-[10px] font-black text-slate-700 uppercase tracking-[0.3em]">No Assets Detected in this sector</p>
-                    </div>
+                  <td colSpan={6} style={{ padding: '48px 0', textAlign: 'center', color: 'var(--color-text-dim)', fontSize: 12 }}>
+                    No endpoints found
                   </td>
                 </tr>
               )}

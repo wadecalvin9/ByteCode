@@ -1,6 +1,7 @@
 # Dependencies
 node_modules/
 dist/
+dist-electron/
 !dashboard/dist/
 .env
 .env.local

@@ -1,8 +1,8 @@
 {
   "name": "bytecode-c2",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Tactical Infrastructure Monitoring & Command and Control System",
-  "main": "server/src/index.js",
+  "main": "electron/main.js",
   "bin": {
     "bytecode-c2": "bin/bytecode.js"
   },
@@ -11,6 +11,7 @@
     "server/src/",
     "server/package.json",
     "dashboard/dist/",
+    "electron/",
     "agent/cmd/",
     "agent/internal/",
     "agent/go.mod",
@@ -20,7 +21,12 @@
     "start": "node bin/bytecode.js start",
     "build": "cd dashboard && npm run build",
     "prepublishOnly": "cd dashboard && npm install && npm run build",
-    "install-all": "npm install && cd server && npm install && cd ../dashboard && npm install"
+    "install-all": "npm install && cd server && npm install && cd ../dashboard && npm install",
+    "electron:dev": "npm run build && electron .",
+    "electron:kill": "powershell -Command \"taskkill /F /IM electron.exe /T\" 2>$null; exit 0",
+    "electron:restart": "npm run electron:kill && npm run electron:dev",
+    "electron:build": "npm run build && electron-builder build --win --publish never",
+    "electron:dist": "npm run build && electron-builder build --win --publish never"
   },
   "keywords": [
     "c2",
@@ -39,8 +45,61 @@
     "express": "^4.21.0",
     "jsonwebtoken": "^9.0.2",
     "raw-body": "^3.0.0",
-    "redis": "^4.7.0",
     "uuid": "^14.0.0",
     "ws": "^8.20.0"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3",
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.bytecode.c2",
+    "productName": "ByteCode",
+    "icon": "electron/assets/icon.png",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "electron/**/*",
+      "server/src/**/*",
+      "server/package.json",
+      "server/package-lock.json",
+      "dashboard/dist/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "server/node_modules",
+        "to": "server/node_modules",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "electron/assets/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "ByteCode C2"
+    }
   }
 }

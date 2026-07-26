@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ByteCode</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      width: 480px;
+      height: 300px;
+      background: transparent;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Courier New', monospace;
+      overflow: hidden;
+      -webkit-app-region: drag;
+      user-select: none;
+    }
+
+    .card {
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(135deg, #0a0b0f 0%, #0d1117 60%, #111827 100%);
+      border: 1px solid rgba(0, 255, 136, 0.2);
+      border-radius: 12px;
+      box-shadow:
+        0 0 40px rgba(0, 255, 136, 0.08),
+        0 0 80px rgba(0, 0, 0, 0.9),
+        inset 0 1px 0 rgba(255,255,255,0.05);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 28px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Animated grid background */
+    .card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0,255,136,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,255,136,0.03) 1px, transparent 1px);
+      background-size: 30px 30px;
+      animation: gridShift 8s linear infinite;
+    }
+
+    @keyframes gridShift {
+      0% { transform: translateY(0); }
+      100% { transform: translateY(30px); }
+    }
+
+    .logo-area {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      z-index: 1;
+    }
+
+    .logo-title {
+      font-size: 32px;
+      font-weight: 700;
+      letter-spacing: 8px;
+      color: #00ff88;
+      text-shadow:
+        0 0 20px rgba(0, 255, 136, 0.6),
+        0 0 40px rgba(0, 255, 136, 0.2);
+      animation: glitch 3s infinite;
+    }
+
+    @keyframes glitch {
+      0%, 92%, 100% { transform: translate(0); filter: none; }
+      93% { transform: translate(-2px, 1px); filter: hue-rotate(90deg); }
+      94% { transform: translate(2px, -1px); filter: hue-rotate(-90deg); }
+      95% { transform: translate(0); filter: none; }
+      96% { transform: translate(1px, 2px); filter: hue-rotate(45deg); }
+      97% { transform: translate(0); filter: none; }
+    }
+
+    .logo-sub {
+      font-size: 10px;
+      letter-spacing: 4px;
+      color: rgba(0, 255, 136, 0.4);
+      text-transform: uppercase;
+    }
+
+    .bottom {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      z-index: 1;
+      width: 80%;
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 2px;
+      background: rgba(0, 255, 136, 0.1);
+      border-radius: 1px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, transparent, #00ff88, transparent);
+      width: 30%;
+      animation: scan 1.6s ease-in-out infinite;
+    }
+
+    @keyframes scan {
+      0% { transform: translateX(-100%); opacity: 0; }
+      20% { opacity: 1; }
+      80% { opacity: 1; }
+      100% { transform: translateX(430%); opacity: 0; }
+    }
+
+    #status {
+      font-size: 11px;
+      letter-spacing: 2px;
+      color: rgba(0, 255, 136, 0.5);
+      animation: blink 2s ease-in-out infinite;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 0.5; }
+      50% { opacity: 1; }
+    }
+
+    .version {
+      position: absolute;
+      bottom: 14px;
+      right: 18px;
+      font-size: 9px;
+      color: rgba(255,255,255,0.1);
+      letter-spacing: 1px;
+      z-index: 1;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo-area">
+      <div class="logo-title">BYTECODE</div>
+      <div class="logo-sub">Tactical Command Interface</div>
+    </div>
+    <div class="bottom">
+      <div class="progress-bar">
+        <div class="progress-fill"></div>
+      </div>
+      <div id="status">INITIALIZING SYSTEMS...</div>
+    </div>
+    <div class="version">v1.1.1</div>
+  </div>
+</body>
+</html>

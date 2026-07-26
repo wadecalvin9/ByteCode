@@ -2,11 +2,8 @@ const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const { initializeDatabase } = require('./config/db');
-const redis = require('./utils/redis');
-
 // Initialize database
 initializeDatabase();
-redis.connect();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
